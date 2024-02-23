@@ -21,6 +21,7 @@ MACRO_CONFIG_STR(AboutContactsMatrix, about_contacts_matrix, 128, "https://infcl
 MACRO_CONFIG_STR(InfConverterId, inf_converter_id, 16, "v2", CFGFLAG_SERVER, "Map converter version id")
 MACRO_CONFIG_INT(InfConverterForceRegeneration, inf_converter_force_regeneration, 0, 0, 1, CFGFLAG_SERVER, "Always (re)generate client map (regardless of cache)")
 
+MACRO_CONFIG_INT(SvShowOpenDoors, sv_show_open_doors, 0, 0, 1, CFGFLAG_SERVER, "Show open doors (0 = no, 1 = yes)")
 MACRO_CONFIG_INT(SvTimelimitInSeconds, sv_timelimit_in_seconds, 0, 0, 10000, CFGFLAG_SERVER, "Time limit in seconds (0 means 'fallback to sv_timelimit')")
 MACRO_CONFIG_INT(SvMaxDDNetVersion, sv_max_ddnet_version, 0, 0, 9999999, CFGFLAG_SERVER, "Automatically kick clients with DDNet version higher than specified")
 

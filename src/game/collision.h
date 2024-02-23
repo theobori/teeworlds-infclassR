@@ -17,6 +17,8 @@ enum
 	CANTMOVE_DOWN = 1 << 3,
 };
 
+enum class EZonePhysics : int8_t;
+
 vec2 ClampVel(int MoveRestriction, vec2 Vel);
 
 typedef bool (*CALLBACK_SWITCHACTIVE)(int Number, void *pUser);
@@ -29,6 +31,8 @@ struct ZoneData
 
 class CCollision
 {
+	std::vector<EZonePhysics> mv_Physics;
+	std::vector<int8_t> mv_Doors;
 	class CTile *m_pTiles;
 	int m_Width;
 	int m_Height;
@@ -39,7 +43,6 @@ class CCollision
 	array< array<int> > m_Zones;
 
 	bool IsSolid(int x, int y) const;
-	int GetTile(int x, int y) const;
 
 public:
 	enum
@@ -52,6 +55,8 @@ public:
 	CCollision();
 	~CCollision();
 	void Init(class CLayers *pLayers);
+	void InitPhysicalLayer();
+	void InitDoorsLayer();
 	void InitTeleports();
 
 	bool CheckPoint(float x, float y) const { return IsSolid(round_to_int(x), round(y)); }
@@ -73,6 +78,15 @@ public:
 	{
 		return GetMoveRestrictions(0, 0, Pos, Distance);
 	}
+
+	EZonePhysics GetPhysicsTile(int x, int y) const;
+	int GetTile(int x, int y) const;
+	int GetFTile(int x, int y) const;
+
+	void SetDoorCollisionAt(int Index, bool HasDoor);
+	void SetDoorCollisionAt(vec2 Pos, bool HasDoor);
+	int GetDoorCollisionAt(vec2 Pos) const;
+	int IntersectLineWithDoors(vec2 From, vec2 To, vec2 *pOutCollision = nullptr, vec2 *pOutBeforeCollision = nullptr) const;
 
 	void SetTime(double Time) { m_Time = Time; }
 	

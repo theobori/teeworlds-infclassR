@@ -13,6 +13,7 @@
 #include <game/server/infclass/entities/flyingpoint.h>
 #include <game/server/infclass/entities/infccharacter.h>
 #include <game/server/infclass/entities/ic-pickup.h>
+#include <game/server/infclass/entities/ic_door.h>
 #include <game/server/infclass/infcplayer.h>
 
 #include <base/tl/ic_array.h>
@@ -2435,6 +2436,11 @@ void CInfClassGameController::ChatWitch(IConsole::IResult *pResult)
 
 		m_WitchCallers.Clear();
 	}
+}
+
+CDoor *CInfClassGameController::AddDoor(const vec2 &From, const vec2 &To)
+{
+	return new CDoor(GameServer(), From, To);
 }
 
 IConsole *CInfClassGameController::Console() const

@@ -63,6 +63,8 @@ void CCollision::Init(class CLayers *pLayers)
 	m_Height = m_pLayers->GameLayer()->m_Height;
 	m_pTiles = static_cast<CTile *>(m_pLayers->Map()->GetData(m_pLayers->GameLayer()->m_Data));
 
+	InitPhysicalLayer();
+	InitDoorsLayer();
 	InitTeleports();
 
 	if(m_pLayers->SpeedupLayer())
@@ -71,6 +73,41 @@ void CCollision::Init(class CLayers *pLayers)
 		if(Size >= (size_t)m_Width * m_Height * sizeof(CSpeedupTile))
 			m_pSpeedup = static_cast<CSpeedupTile *>(m_pLayers->Map()->GetData(m_pLayers->SpeedupLayer()->m_Speedup));
 	}
+}
+
+constexpr EZonePhysics GetPhysicalTileByTile(int Tile)
+{
+	switch(Tile)
+	{
+	case TILE_SOLID:
+		return EZonePhysics::Solid;
+	case TILE_NOHOOK:
+		return EZonePhysics::NoHook;
+	default:
+		break;
+	}
+
+	return EZonePhysics::Null;
+}
+
+void CCollision::InitPhysicalLayer()
+{
+	mv_Physics.resize(m_Width * m_Height);
+	for(int Y = 0; Y < m_Height; ++Y)
+	{
+		for(int X = 0; X < m_Width; ++X)
+		{
+			int Index = Y * m_Width + X;
+			int Tile = m_pTiles[Index].m_Index;
+			mv_Physics[Index] = GetPhysicalTileByTile(Tile);
+		}
+	}
+}
+
+void CCollision::InitDoorsLayer()
+{
+	mv_Doors.clear();
+	mv_Doors.resize(m_Width * m_Height);
 }
 
 void CCollision::InitTeleports()
@@ -218,6 +255,76 @@ int CCollision::GetMoveRestrictions(CALLBACK_SWITCHACTIVE pfnSwitchActive, void 
 	return Restrictions;
 }
 
+void CCollision::SetDoorCollisionAt(int Index, bool HasDoor)
+{
+	if (HasDoor)
+	{
+		mv_Doors[Index]++;
+	}
+	else
+	{
+		mv_Doors[Index]--;
+	}
+}
+
+void CCollision::SetDoorCollisionAt(vec2 Pos, bool HasDoor)
+{
+	SetDoorCollisionAt(GetPureMapIndex(Pos), HasDoor);
+}
+
+int CCollision::GetDoorCollisionAt(vec2 Pos) const
+{
+	int Nx = clamp(static_cast<int>(Pos.x) / 32, 0, m_Width - 1);
+	int Ny = clamp(static_cast<int>(Pos.y) / 32, 0, m_Height - 1);
+	int Index = Ny * m_Width + Nx;
+
+	return mv_Doors.at(Index);
+}
+
+int CCollision::IntersectLineWithDoors(vec2 From, vec2 To, vec2 *pOutCollision, vec2 *pOutBeforeCollision) const
+{
+	vec2 Pos1Pos0 = To - From;
+	float Distance = length(Pos1Pos0);
+	int End(Distance + 1);
+	vec2 Last = From;
+
+	for(int i = 0; i < End; i++)
+	{
+		float a = i / Distance;
+		vec2 Pos = From + Pos1Pos0 * a;
+		if(GetDoorCollisionAt(Pos))
+		{
+			if(pOutCollision)
+				*pOutCollision = Pos;
+			if(pOutBeforeCollision)
+				*pOutBeforeCollision = Last;
+			return GetDoorCollisionAt(Pos);
+		}
+		Last = Pos;
+	}
+	if(pOutCollision)
+		*pOutCollision = To;
+	if(pOutBeforeCollision)
+		*pOutBeforeCollision = To;
+	return 0;
+}
+
+EZonePhysics CCollision::GetPhysicsTile(int x, int y) const
+{
+	int Nx = clamp(x / 32, 0, m_Width - 1);
+	int Ny = clamp(y / 32, 0, m_Height - 1);
+	int Index = Ny * m_Width + Nx;
+
+	EZonePhysics Value = mv_Physics.at(Index);
+	if (Value == EZonePhysics::Null)
+	{
+		if(mv_Doors.at(Index))
+			return EZonePhysics::NoHook;
+	}
+
+	return Value;
+}
+
 int CCollision::GetTile(int x, int y) const
 {
 	if(!m_pTiles)
@@ -230,6 +337,10 @@ int CCollision::GetTile(int x, int y) const
 	int Index = m_pTiles[pos].m_Index;
 	if(Index >= TILE_SOLID && Index <= TILE_NOLASER)
 		return Index;
+
+	if(mv_Doors.at(pos))
+		return TILE_NOHOOK;
+
 	return 0;
 }
 
@@ -434,8 +545,7 @@ void CCollision::Dest()
 
 bool CCollision::IsSolid(int x, int y) const
 {
-	int index = GetTile(x, y);
-	return index == TILE_SOLID || index == TILE_NOHOOK;
+	return GetPhysicsTile(x, y) != EZonePhysics::Null;
 }
 
 int CCollision::IsSpeedup(int Index) const

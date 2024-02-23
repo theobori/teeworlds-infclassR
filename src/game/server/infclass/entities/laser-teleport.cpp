@@ -46,6 +46,12 @@ std::optional<vec2> CLaserTeleport::FindPortalPosition(CInfClassCharacter *pChar
 	if(length(PortalShift) > 500.0f)
 		PortalShift = PortalDir * 500.0f;
 
+	vec2 EndPoint{};
+	if(pCharacter->GameServer()->Collision()->IntersectLineWithDoors(pCharacter->GetPos(), pCharacter->GetPos() + PortalShift, nullptr, &EndPoint))
+	{
+		PortalShift = EndPoint - pCharacter->GetPos();
+	}
+
 	float Iterator = length(PortalShift);
 	while(Iterator > 0.0f)
 	{
