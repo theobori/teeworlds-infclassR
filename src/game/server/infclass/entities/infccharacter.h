@@ -216,6 +216,10 @@ public:
 
 	void CancelLoveEffect();
 
+	bool IsSleeping() const { return m_SleepingTicks > 0; }
+	void PutToSleep(float Duration, std::optional<int> FromCid = {});
+	void CancelSleeping();
+
 	bool IsInSlowMotion() const;
 	float SlowMotionEffect(float Duration, std::optional<int> FromCid = {});
 	void CancelSlowMotion();
@@ -312,6 +316,9 @@ protected:
 	int m_DamageTaken = 0;
 	icArray<CDamagePoint, 4> m_TakenDamageDetails;
 	bool m_PositionLocked = false;
+
+	int m_SleepingTicks = 0;
+	std::optional<int> m_PutToSleepBy;
 
 	bool m_IsFrozen = false;
 	int m_FrozenTime;

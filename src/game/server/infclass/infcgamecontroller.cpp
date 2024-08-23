@@ -5006,10 +5006,10 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 				continue;
 
 			CInfClassCharacter *pCharacter = Iter.Player()->GetCharacter();
-			if(!pCharacter)
+			if(!pCharacter || !pCharacter->IsAlive())
 				continue;
 
-			if(pCharacter->IsFrozen())
+			if(pCharacter->IsFrozen() || pCharacter->IsSleeping())
 				continue;
 
 			CInfClassInfected *pInfected = CInfClassInfected::GetInstance(pCharacter);

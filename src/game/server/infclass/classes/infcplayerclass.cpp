@@ -175,6 +175,9 @@ int CInfClassPlayerClass::GetDefaultEmote() const
 	if(!m_pCharacter)
 		return EmoteNormal;
 
+	if(m_pCharacter->IsSleeping())
+		EmoteNormal = EMOTE_BLINK;
+
 	if(m_pCharacter->IsBlind())
 		EmoteNormal = EMOTE_BLINK;
 

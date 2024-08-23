@@ -162,6 +162,12 @@ void CInfClassPlayer::Snap(int SnappingClient)
 	if(m_FollowTargetTicks > 0)
 		pDDNetPlayer->m_Flags |= EXPLAYERFLAG_SPEC;
 
+	CInfClassCharacter *pCharacter = GetCharacter();
+	if(pCharacter && pCharacter->IsSleeping())
+	{
+		pDDNetPlayer->m_Flags |= EXPLAYERFLAG_AFK;
+	}
+
 	int InfClassVersion = Server()->GetClientInfclassVersion(SnappingClient);
 
 	if(InfClassVersion)
