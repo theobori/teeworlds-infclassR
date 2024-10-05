@@ -24,6 +24,7 @@ CInfClassPlayer::CInfClassPlayer(CInfClassGameController *pGameController, int U
 	m_InfectionTick = -1;
 	m_HookProtection = false;
 	m_HookProtectionAutomatic = true;
+	m_ShowOthers = SHOW_OTHERS_ONLY_TEAM;
 
 	SetClass(EPlayerClass::None);
 }

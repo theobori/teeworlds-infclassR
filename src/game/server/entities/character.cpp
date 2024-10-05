@@ -99,6 +99,12 @@ void CCharacter::SetWeapon(int W)
 		SetActiveWeapon(0);
 }
 
+void CCharacter::SetSolo(bool Solo)
+{
+	m_Core.m_Solo = Solo;
+	Teams()->m_Core.SetSolo(m_pPlayer->GetCid(), Solo);
+}
+
 bool CCharacter::IsGrounded() const
 {
 	if(Collision()->CheckPoint(GetPos().x + m_ProximityRadius / 2, GetPos().y + m_ProximityRadius / 2 + 5))

@@ -819,6 +819,8 @@ void CInfClassHuman::OnHammerFired(WeaponFireContext *pFireContext)
 	for(const int TargetCid : Targets)
 	{
 		CInfClassCharacter *pTarget = GameController()->GetCharacter(TargetCid);
+		if(pTarget->IsSolo())
+			continue;
 
 		if(GameServer()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos()))
 			continue;

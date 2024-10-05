@@ -199,9 +199,13 @@ void CInfClassCharacter::Destroy()
 
 void CInfClassCharacter::TickBeforeWorld()
 {
+	const int CurrentTick = Server()->Tick();
+
 	m_Core.m_Infected = IsInfected();
 	m_Core.m_InLove = IsInLove();
 	m_Core.m_HookProtected = GetPlayer()->HookProtectionEnabled();
+
+	SetSolo(m_SoloUntilTick >= CurrentTick);
 }
 
 void CInfClassCharacter::Tick()
@@ -350,6 +354,8 @@ void CInfClassCharacter::Snap(int SnappingClient)
 		return;
 
 	pDDNetCharacter->m_Flags = 0;
+	if(m_Core.m_Solo)
+		pDDNetCharacter->m_Flags |= CHARACTERFLAG_SOLO;
 
 	if(GetPlayerClass() == EPlayerClass::Mercenary)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_JETPACK;
@@ -412,7 +418,6 @@ void CInfClassCharacter::Snap(int SnappingClient)
 
 void CInfClassCharacter::SpecialSnapForClient(int SnappingClient, bool *pDoSnap)
 {
-	CInfClassPlayer *pDestClient = GameController()->GetPlayer(SnappingClient);
 	CInfClassCharacter *pDestCharacter = GameController()->GetCharacter(SnappingClient);
 	if((GetCid() != SnappingClient) && pDestCharacter && pDestCharacter->IsBlind())
 	{
@@ -420,7 +425,7 @@ void CInfClassCharacter::SpecialSnapForClient(int SnappingClient, bool *pDoSnap)
 		return;
 	}
 
-	if(IsInvisible() && !GameController()->CanSeeDetails(SnappingClient, GetCid()))
+	if((IsInvisible() || IsSolo()) && !GameController()->CanSeeDetails(SnappingClient, GetCid()))
 	{
 		*pDoSnap = false;
 		return;
@@ -2161,6 +2166,11 @@ bool CInfClassCharacter::HasGrantedInvisibility() const
 	return Server()->Tick() < m_GrantedInvisibilityUntilTick;
 }
 
+bool CInfClassCharacter::IsSolo() const
+{
+	return m_Core.m_Solo;
+}
+
 bool CInfClassCharacter::IsInvincible() const
 {
 	return m_Invincible || (m_ProtectionTick > 0);
@@ -2288,6 +2298,12 @@ void CInfClassCharacter::GrantInvisibility(float Duration)
 	{
 		MakeInvisible();
 	}
+}
+
+void CInfClassCharacter::SetSoloForDuration(float Duration)
+{
+	m_SoloUntilTick = Server()->Tick() + Server()->TickSpeed() * Duration;
+	SetSolo(Duration > 0);
 }
 
 void CInfClassCharacter::GrantSpawnProtection(float Duration)

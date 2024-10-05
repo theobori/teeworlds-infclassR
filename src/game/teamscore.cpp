@@ -32,6 +32,8 @@ bool CTeamsCore::CanKeepHook(int ClientId1, int ClientId2) const
 
 bool CTeamsCore::CanCollide(int ClientId1, int ClientId2) const
 {
+	if(m_aIsSolo[ClientId1] || m_aIsSolo[ClientId2])
+		return false;
 	if(m_IsInfclass)
 	{
 		if(ClientId1 == ClientId2)
@@ -49,13 +51,13 @@ bool CTeamsCore::CanCollide(int ClientId1, int ClientId2) const
 	
 	if(m_aTeam[ClientId1] == (m_IsDDRace16 ? VANILLA_TEAM_SUPER : TEAM_SUPER) || m_aTeam[ClientId2] == (m_IsDDRace16 ? VANILLA_TEAM_SUPER : TEAM_SUPER) || ClientId1 == ClientId2)
 		return true;
-	if(m_aIsSolo[ClientId1] || m_aIsSolo[ClientId2])
-		return false;
 	return m_aTeam[ClientId1] == m_aTeam[ClientId2];
 }
 
 bool CTeamsCore::CanHook(int HookerId, int TargetId) const
 {
+	if(m_aIsSolo[HookerId] || m_aIsSolo[TargetId])
+		return false;
 	if(m_IsInfclass)
 	{
 		if(m_aIsInfected[HookerId] != m_aIsInfected[TargetId])
@@ -66,8 +68,6 @@ bool CTeamsCore::CanHook(int HookerId, int TargetId) const
 
 	if(m_aTeam[HookerId] == (m_IsDDRace16 ? VANILLA_TEAM_SUPER : TEAM_SUPER) || m_aTeam[TargetId] == (m_IsDDRace16 ? VANILLA_TEAM_SUPER : TEAM_SUPER) || HookerId == TargetId)
 		return true;
-	if(m_aIsSolo[HookerId] || m_aIsSolo[TargetId])
-		return false;
 	return m_aTeam[HookerId] == m_aTeam[TargetId];
 }
 
