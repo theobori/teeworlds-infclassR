@@ -22,6 +22,7 @@
 #include <game/voting.h>
 
 #include <list>
+#include <string>
 
 /* DDNET MODIFICATION START *******************************************/
 #include "base/logger.h"
@@ -281,6 +282,8 @@ public:
 	unsigned m_aCurrentMapCrc[NUM_MAP_TYPES];
 	unsigned char *m_apCurrentMapData[NUM_MAP_TYPES];
 	unsigned int m_aCurrentMapSize[NUM_MAP_TYPES];
+	std::string m_MapDownloadUrl[NUM_MAP_TYPES];
+	std::string m_ClientMapFileName[NUM_MAP_TYPES];
 
 	CDemoRecorder m_aDemoRecorder[NUM_RECORDERS];
 

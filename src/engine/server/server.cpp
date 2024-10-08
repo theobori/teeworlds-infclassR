@@ -1351,7 +1351,7 @@ void CServer::SendMap(int ClientId)
 		Msg.AddRaw(&m_aCurrentMapSha256[MapType].data, sizeof(m_aCurrentMapSha256[MapType].data));
 		Msg.AddInt(m_aCurrentMapCrc[MapType]);
 		Msg.AddInt(m_aCurrentMapSize[MapType]);
-		Msg.AddString("", 0); // HTTPS map download URL
+		Msg.AddString(m_MapDownloadUrl[MapType].c_str(), 0);
 		SendMsg(&Msg, MSGFLAG_VITAL, ClientId);
 	}
 	{
@@ -1531,10 +1531,12 @@ bool CServer::GenerateClientMap(const char *pMapFilePath, const char *pMapName)
 
 	char aClientMapDir[256];
 	char aClientMapName[256];
+	char aClientMapFileName[256];
 	const char *pConverterId = Config()->m_InfConverterId;
 	pConverterId = EventsDirector::GetMapConverterId(pConverterId);
 	str_format(aClientMapDir, sizeof(aClientMapDir), "clientmaps/%s", pConverterId);
-	str_format(aClientMapName, sizeof(aClientMapName), "%s/%s_%08x.map", aClientMapDir, pMapName, ServerMapCrc);
+	str_format(aClientMapFileName, sizeof(aClientMapFileName), "%s_%08x.map", pMapName, ServerMapCrc);
+	str_format(aClientMapName, sizeof(aClientMapName), "%s/%s", aClientMapDir, aClientMapFileName);
 
 	CMapConverter MapConverter(Storage(), m_pMap, Console());
 	if(!MapConverter.Load())
@@ -1584,6 +1586,7 @@ bool CServer::GenerateClientMap(const char *pMapFilePath, const char *pMapName)
 		void *pData;
 		Storage()->ReadFile(aClientMapName, IStorage::TYPE_ALL, &pData, &m_aCurrentMapSize[MAP_TYPE_SIX]);
 		m_apCurrentMapData[MAP_TYPE_SIX] = (unsigned char *)pData;
+		m_ClientMapFileName[MAP_TYPE_SIX] = aClientMapFileName;
 	}
 
 	return true;
@@ -2775,6 +2778,18 @@ int CServer::LoadMap(const char *pMapName)
 	ResetMapVotes();
 
 /* INFECTION MODIFICATION END *****************************************/
+
+	using namespace std::string_literals;
+
+	// SvMapsBaseUrl
+	if(Config()->m_SvMapsBaseUrl[0])
+	{
+		m_MapDownloadUrl[MAP_TYPE_SIX] = Config()->m_SvMapsBaseUrl + "/"s + m_ClientMapFileName[MAP_TYPE_SIX];
+	}
+	else
+	{
+		m_MapDownloadUrl[MAP_TYPE_SIX].clear();
+	}
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_aPrevStates[i] = m_aClients[i].m_State;
