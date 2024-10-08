@@ -4244,7 +4244,7 @@ void CInfClassGameController::Snap(int SnappingClient)
 	CNetObj_InfClassGameInfo *pInfclassGameInfoObj = Server()->SnapNewItem<CNetObj_InfClassGameInfo>(0);
 	pInfclassGameInfoObj->m_Version = 2;
 	pInfclassGameInfoObj->m_Flags = 0;
-	pInfclassGameInfoObj->m_TimeLimitInSeconds = GetTimeLimitMinutes() * 60;
+	pInfclassGameInfoObj->m_TimeLimitInSeconds = GetTimeLimitSeconds();
 	pInfclassGameInfoObj->m_HeroGiftTick = m_HeroGiftTick;
 
 	int InfClassVersion = Server()->GetClientInfclassVersion(SnappingClient);
@@ -4818,7 +4818,7 @@ void CInfClassGameController::DoWincheck()
 	bool HumanVictoryConditionsMet = false;
 	bool TimeIsOver = false;
 	const int Seconds = (Server()->Tick() - m_RoundStartTick) / ((float)Server()->TickSpeed());
-	if(GetTimeLimitMinutes() > 0 && Seconds >= GetTimeLimitMinutes() * 60)
+	if(GetTimeLimitMinutes() > 0 && Seconds >= GetTimeLimitSeconds())
 	{
 		TimeIsOver = true;
 	}
