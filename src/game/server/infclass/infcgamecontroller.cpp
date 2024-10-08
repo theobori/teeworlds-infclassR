@@ -2903,6 +2903,7 @@ int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) con
 		return PlayersNumber * 0.43;
 	}
 
+	int InitialPlayersLimit = Config()->m_InfFirstInfectedLimit;
 	int NumFirstInfected = 0;
 
 	if(PlayersNumber > 20)
@@ -2916,10 +2917,9 @@ int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) con
 	else
 		NumFirstInfected = 0;
 
-	int FirstInfectedLimit = Config()->m_InfFirstInfectedLimit;
-	if(FirstInfectedLimit && NumFirstInfected > FirstInfectedLimit)
+	if(InitialPlayersLimit && NumFirstInfected > InitialPlayersLimit)
 	{
-		NumFirstInfected = FirstInfectedLimit;
+		NumFirstInfected = InitialPlayersLimit;
 	}
 
 	return NumFirstInfected;
