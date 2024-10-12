@@ -4908,41 +4908,44 @@ void CInfClassGameController::DoWincheck()
 	if(Config()->m_InfTrainingMode)
 		return;
 
-	int NumHumans = 0;
-	int NumInfected = 0;
-	GetPlayerCounter(-1, NumHumans, NumInfected);
-
-	// One infected can win in some rounds; we have a check if this is a valid situation in CheckRoundFailed()
-	if(m_InfectedStarted && NumHumans == 0 && NumInfected >= 1)
-	{
-		AnnounceTheWinner(NumHumans);
-		return;
-	}
-
 	if(!m_InfectedStarted)
 	{
 		return;
 	}
 
-	bool HumanVictoryConditionsMet = false;
-	bool TimeIsOver = false;
+	int NumHumans = 0;
+	int NumInfected = 0;
+	GetPlayerCounter(-1, NumHumans, NumInfected);
+
+	bool VictoryConditionsMet = false;
+	bool NeedFinalExplosion = false;
+	bool TimeIsOut = false;
 	const int Seconds = (Server()->Tick() - m_RoundStartTick) / ((float)Server()->TickSpeed());
 	if(GetTimeLimitMinutes() > 0 && Seconds >= GetTimeLimitSeconds())
 	{
-		TimeIsOver = true;
+		TimeIsOut = true;
 	}
 
-	if(TimeIsOver)
+	switch(GetRoundType())
 	{
-		HumanVictoryConditionsMet = true;
+	default:
+		// One infected can win in some rounds; we have a check if this is a valid situation in CheckRoundFailed()
+		if(NumHumans == 0 && NumInfected >= 1)
+		{
+			VictoryConditionsMet = true;
+		}
+		else if(TimeIsOut)
+		{
+			VictoryConditionsMet = true;
+			NeedFinalExplosion = true;
+		}
+		break;
 	}
 
-	if(!HumanVictoryConditionsMet)
+	if(!VictoryConditionsMet)
 	{
 		return;
 	}
-
-	bool NeedFinalExplosion = true;
 
 	// Start the final explosion if the time is over
 	if(NeedFinalExplosion)
