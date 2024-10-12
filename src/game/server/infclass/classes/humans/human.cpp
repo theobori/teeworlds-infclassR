@@ -303,7 +303,7 @@ void CInfClassHuman::OnPlayerSnap(int SnappingClient, int InfClassVersion)
 					continue;
 				}
 
-				pClassInfo->m_Data1 = pWall->GetEndTick();
+				pClassInfo->m_Data1 = pWall->GetEndTick().value_or(-1);
 				break;
 			}
 			break;
@@ -1352,9 +1352,9 @@ void CInfClassHuman::BroadcastWeaponState() const
 			}
 		}
 
-		if(pOwnWall && pOwnWall->HasSecondPosition())
+		if(pOwnWall && pOwnWall->HasSecondPosition() && pOwnWall->GetEndTick().has_value())
 		{
-			int RemainingTicks = pOwnWall->GetEndTick() - CurrentTick;
+			int RemainingTicks = pOwnWall->GetEndTick().value() - CurrentTick;
 			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
 			GameServer()->SendBroadcast_Localization(GetCid(),
 				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
@@ -1761,6 +1761,7 @@ void CInfClassHuman::PlaceEngineerWall(WeaponFireContext *pFireContext)
 		if(pFireContext->FireAccepted)
 		{
 			pExistingWall->SetEndPosition(GetPos());
+			pExistingWall->SetLifespan(Config()->m_InfBarrierLifeSpan);
 			GameServer()->CreateSound(GetPos(), SOUND_LASER_FIRE);
 		}
 		else
