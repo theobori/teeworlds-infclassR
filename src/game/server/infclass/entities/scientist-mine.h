@@ -19,11 +19,11 @@ public:
 	static int EntityId;
 
 	CScientistMine(CGameContext *pGameContext, vec2 Pos, int Owner);
-	virtual ~CScientistMine();
+	~CScientistMine() override;
 
-	virtual void Snap(int SnappingClient);
-	virtual void TickPaused();
-	virtual void Tick();
+	void Snap(int SnappingClient) override;
+	void TickPaused() override;
+	void Tick() override;
 
 	void Explode(int DetonatedBy);
 

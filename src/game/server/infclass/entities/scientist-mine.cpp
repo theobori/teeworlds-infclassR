@@ -111,7 +111,10 @@ void CScientistMine::Snap(int SnappingClient)
 
 void CScientistMine::Tick()
 {
-	if(m_MarkedForDestroy) return;
+	CPlacedObject::Tick();
+
+	if(IsMarkedForDestroy())
+		return;
 
 	// Find other players
 	bool MustExplode = false;
@@ -140,5 +143,7 @@ void CScientistMine::Tick()
 
 void CScientistMine::TickPaused()
 {
+	CPlacedObject::TickPaused();
+
 	++m_StartTick;
 }
