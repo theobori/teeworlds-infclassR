@@ -2716,6 +2716,7 @@ void CInfClassGameController::StartRound()
 	m_RoundType = NewRoundType;
 	QueueRoundType(ERoundType::Invalid);
 
+	m_WinCheckEnabled.reset();
 	m_RoundMinimumInfected.reset();
 	m_RoundTimeLimitSeconds.reset();
 
@@ -4736,6 +4737,9 @@ void CInfClassGameController::CheckRoundFailed()
 	if(m_Warmup)
 		return;
 
+	if(!IsWinCheckEnabled())
+		return;
+
 	if(IsGameOver())
 		return;
 
@@ -4796,6 +4800,9 @@ void CInfClassGameController::CheckRoundFailed()
 
 void CInfClassGameController::DoWincheck()
 {
+	if(!IsWinCheckEnabled())
+		return;
+
 	if(Config()->m_InfTrainingMode)
 		return;
 
@@ -5539,6 +5546,16 @@ int CInfClassGameController::GetMinPlayers() const
 void CInfClassGameController::SetRoundMinimumPlayers(int Number)
 {
 	m_RoundMinimumPlayers = Number;
+}
+
+bool CInfClassGameController::IsWinCheckEnabled() const
+{
+	return m_WinCheckEnabled.value_or(true);
+}
+
+void CInfClassGameController::SetWinCheckEnabled(bool Enabled)
+{
+	m_WinCheckEnabled = Enabled;
 }
 
 ERoundType CInfClassGameController::GetDefaultRoundType() const

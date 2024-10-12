@@ -143,6 +143,9 @@ public:
 	int GetMinPlayers() const;
 	void SetRoundMinimumPlayers(int Number);
 
+	bool IsWinCheckEnabled() const;
+	void SetWinCheckEnabled(bool Enabled);
+
 	ERoundType GetDefaultRoundType() const;
 	ERoundType GetRoundType() const;
 	void QueueRoundType(ERoundType RoundType);
@@ -382,6 +385,7 @@ private:
 
 	CGameTeams m_Teams;
 
+	std::optional<bool> m_WinCheckEnabled;
 	std::optional<int> m_RoundMinimumPlayers;
 	std::optional<int> m_RoundMinimumInfected;
 	std::optional<float> m_RoundTimeLimitSeconds;
