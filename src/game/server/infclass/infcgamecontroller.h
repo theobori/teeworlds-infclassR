@@ -50,6 +50,13 @@ enum class CLASS_AVAILABILITY
 	LIMIT_EXCEEDED,
 };
 
+enum class EFinalExplosionState
+{
+	NotStarted,
+	Started,
+	Finished,
+};
+
 struct FunRoundConfiguration
 {
 	FunRoundConfiguration() = default;
@@ -204,6 +211,9 @@ public:
 	void StartSurvivalRound();
 	void EndSurvivalRound();
 
+	void EnsureFinalExplosionIsStarted();
+	void StartFinalExplosion();
+	void ProgressFinalExplosion();
 	void ResetFinalExplosion();
 	void SaveRoundRules();
 	void StartSurvivalGame();
@@ -381,7 +391,7 @@ private:
 	int m_MapWidth;
 	int m_MapHeight;
 	int* m_GrowingMap;
-	bool m_ExplosionStarted;
+	EFinalExplosionState m_FinalExplosionState{};
 
 	CGameTeams m_Teams;
 

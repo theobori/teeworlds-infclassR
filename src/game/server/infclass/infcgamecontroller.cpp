@@ -173,7 +173,6 @@ CInfClassGameController::CInfClassGameController(class CGameContext *pGameServer
 	m_ZoneHandle_icTeleport = GameServer()->Collision()->GetZoneHandle("icTele");
 	m_ZoneHandle_icBonus = GameServer()->Collision()->GetZoneHandle("icBonus");
 
-	m_ExplosionStarted = false;
 	m_MapWidth = GameServer()->Collision()->GetWidth();
 	m_MapHeight = GameServer()->Collision()->GetHeight();
 	m_GrowingMap = new int[m_MapWidth*m_MapHeight];
@@ -912,15 +911,15 @@ void CInfClassGameController::SendServerParams(int ClientId) const
 
 void CInfClassGameController::ResetFinalExplosion()
 {
-	m_ExplosionStarted = false;
-	
-	for(int j=0; j<m_MapHeight; j++)
+	m_FinalExplosionState = EFinalExplosionState::NotStarted;
+
+	for(int j = 0; j < m_MapHeight; j++)
 	{
-		for(int i=0; i<m_MapWidth; i++)
+		for(int i = 0; i < m_MapWidth; i++)
 		{
-			if(!(m_GrowingMap[j*m_MapWidth+i] & 4))
+			if(!(m_GrowingMap[j * m_MapWidth + i] & 4))
 			{
-				m_GrowingMap[j*m_MapWidth+i] = 1;
+				m_GrowingMap[j * m_MapWidth + i] = 1;
 			}
 		}
 	}
@@ -4209,6 +4208,105 @@ void CInfClassGameController::EndSurvivalRound()
 	QueueRoundType(ERoundType::Survival);
 }
 
+void CInfClassGameController::EnsureFinalExplosionIsStarted()
+{
+	if(m_FinalExplosionState == EFinalExplosionState::NotStarted)
+	{
+		StartFinalExplosion();
+	}
+}
+
+void CInfClassGameController::StartFinalExplosion()
+{
+	dbg_assert(m_FinalExplosionState == EFinalExplosionState::NotStarted, "Invalid final explosion start");
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
+	{
+		if(p->IsInfected())
+		{
+			GameServer()->SendEmoticon(p->GetCid(), EMOTICON_GHOST);
+		}
+		else
+		{
+			GameServer()->SendEmoticon(p->GetCid(), EMOTICON_EYES);
+		}
+	}
+
+	m_FinalExplosionState = EFinalExplosionState::Started;
+}
+
+void CInfClassGameController::ProgressFinalExplosion()
+{
+	if (m_FinalExplosionState != EFinalExplosionState::Started)
+	{
+		return;
+	}
+
+	bool NewExplosion = false;
+
+	for(int j = 0; j < m_MapHeight; j++)
+	{
+		for(int i = 0; i < m_MapWidth; i++)
+		{
+			if((m_GrowingMap[j * m_MapWidth + i] & 1) && ((i > 0 && m_GrowingMap[j * m_MapWidth + i - 1] & 2) ||
+															 (i < m_MapWidth - 1 && m_GrowingMap[j * m_MapWidth + i + 1] & 2) ||
+															 (j > 0 && m_GrowingMap[(j - 1) * m_MapWidth + i] & 2) ||
+															 (j < m_MapHeight - 1 && m_GrowingMap[(j + 1) * m_MapWidth + i] & 2)))
+			{
+				NewExplosion = true;
+				m_GrowingMap[j * m_MapWidth + i] |= 8;
+				m_GrowingMap[j * m_MapWidth + i] &= ~1;
+				if(random_prob(0.1f))
+				{
+					vec2 TilePos = vec2(16.0f, 16.0f) + vec2(i * 32.0f, j * 32.0f);
+					static const int Damage = 0;
+					CreateExplosion(TilePos, -1, EDamageType::NO_DAMAGE, Damage);
+					GameServer()->CreateSound(TilePos, SOUND_GRENADE_EXPLODE);
+				}
+			}
+		}
+	}
+
+	for(int j = 0; j < m_MapHeight; j++)
+	{
+		for(int i = 0; i < m_MapWidth; i++)
+		{
+			if(m_GrowingMap[j * m_MapWidth + i] & 8)
+			{
+				m_GrowingMap[j * m_MapWidth + i] &= ~8;
+				m_GrowingMap[j * m_MapWidth + i] |= 2;
+			}
+		}
+	}
+
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
+	{
+		if(p->IsHuman())
+			continue;
+
+		int tileX = static_cast<int>(round(p->m_Pos.x)) / 32;
+		int tileY = static_cast<int>(round(p->m_Pos.y)) / 32;
+
+		if(tileX < 0)
+			tileX = 0;
+		if(tileX >= m_MapWidth)
+			tileX = m_MapWidth - 1;
+		if(tileY < 0)
+			tileY = 0;
+		if(tileY >= m_MapHeight)
+			tileY = m_MapHeight - 1;
+
+		if(m_GrowingMap[tileY * m_MapWidth + tileX] & 2 && p->GetPlayer())
+		{
+			p->Die(p->GetCid(), EDamageType::GAME_FINAL_EXPLOSION);
+		}
+	}
+
+	if(!NewExplosion)
+	{
+		m_FinalExplosionState = EFinalExplosionState::Finished;
+	}
+}
+
 void CInfClassGameController::Snap(int SnappingClient)
 {
 	CNetObj_GameInfo *pGameInfoObj = Server()->SnapNewItem<CNetObj_GameInfo>(0);
@@ -4843,90 +4941,23 @@ void CInfClassGameController::DoWincheck()
 	bool NeedFinalExplosion = true;
 
 	//Start the final explosion if the time is over
-	if(NeedFinalExplosion && !m_ExplosionStarted)
+	if(NeedFinalExplosion)
 	{
-		for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
+		switch(m_FinalExplosionState)
 		{
-			if(p->IsInfected())
-			{
-				GameServer()->SendEmoticon(p->GetCid(), EMOTICON_GHOST);
-			}
-			else
-			{
-				GameServer()->SendEmoticon(p->GetCid(), EMOTICON_EYES);
-			}
-		}
-		m_ExplosionStarted = true;
-	}
-
-	//Do the final explosion
-	if(m_ExplosionStarted)
-	{
-		bool NewExplosion = false;
-
-		for(int j=0; j<m_MapHeight; j++)
-		{
-			for(int i=0; i<m_MapWidth; i++)
-			{
-				if((m_GrowingMap[j*m_MapWidth+i] & 1) && (
-					(i > 0 && m_GrowingMap[j*m_MapWidth+i-1] & 2) ||
-					(i < m_MapWidth-1 && m_GrowingMap[j*m_MapWidth+i+1] & 2) ||
-					(j > 0 && m_GrowingMap[(j-1)*m_MapWidth+i] & 2) ||
-					(j < m_MapHeight-1 && m_GrowingMap[(j+1)*m_MapWidth+i] & 2)
-				))
-				{
-					NewExplosion = true;
-					m_GrowingMap[j*m_MapWidth+i] |= 8;
-					m_GrowingMap[j*m_MapWidth+i] &= ~1;
-					if(random_prob(0.1f))
-					{
-						vec2 TilePos = vec2(16.0f, 16.0f) + vec2(i*32.0f, j*32.0f);
-						static const int Damage = 0;
-						CreateExplosion(TilePos, -1, EDamageType::NO_DAMAGE, Damage);
-						GameServer()->CreateSound(TilePos, SOUND_GRENADE_EXPLODE);
-					}
-				}
-			}
-		}
-
-		for(int j=0; j<m_MapHeight; j++)
-		{
-			for(int i=0; i<m_MapWidth; i++)
-			{
-				if(m_GrowingMap[j*m_MapWidth+i] & 8)
-				{
-					m_GrowingMap[j*m_MapWidth+i] &= ~8;
-					m_GrowingMap[j*m_MapWidth+i] |= 2;
-				}
-			}
-		}
-
-		for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
-		{
-			if(p->IsHuman())
-				continue;
-
-			int tileX = static_cast<int>(round(p->m_Pos.x))/32;
-			int tileY = static_cast<int>(round(p->m_Pos.y))/32;
-
-			if(tileX < 0) tileX = 0;
-			if(tileX >= m_MapWidth) tileX = m_MapWidth-1;
-			if(tileY < 0) tileY = 0;
-			if(tileY >= m_MapHeight) tileY = m_MapHeight-1;
-
-			if(m_GrowingMap[tileY*m_MapWidth+tileX] & 2 && p->GetPlayer())
-			{
-				p->Die(p->GetCid(), EDamageType::GAME_FINAL_EXPLOSION);
-			}
-		}
-		if(!NewExplosion)
-		{
-			NeedFinalExplosion = false;
+		case EFinalExplosionState::NotStarted:
+			StartFinalExplosion();
+			break;
+		case EFinalExplosionState::Started:
+			ProgressFinalExplosion();
+			break;
+		case EFinalExplosionState::Finished:
+			break;
 		}
 	}
 
 	//If no more explosions, game over, decide who win
-	if(!NeedFinalExplosion)
+	if(!NeedFinalExplosion || (m_FinalExplosionState == EFinalExplosionState::Finished))
 	{
 		AnnounceTheWinner(NumHumans);
 	}
@@ -4984,7 +5015,7 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 	if(Infect)
 		pPlayer->StartInfection();
 
-	if(pPlayer->IsInfected() && m_ExplosionStarted)
+	if(pPlayer->IsInfected() && (m_FinalExplosionState != EFinalExplosionState::NotStarted))
 		return false;
 
 	if(GetRoundType() == ERoundType::Survival && pPlayer->IsInfected())
