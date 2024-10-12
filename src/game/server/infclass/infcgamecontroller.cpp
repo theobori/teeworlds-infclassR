@@ -3439,6 +3439,10 @@ void CInfClassGameController::Tick()
 		}
 
 		DoWincheck();
+		if(m_FinalExplosionState == EFinalExplosionState::Started)
+		{
+			ProgressFinalExplosion();
+		}
 	}
 	else
 	{
@@ -4940,20 +4944,10 @@ void CInfClassGameController::DoWincheck()
 
 	bool NeedFinalExplosion = true;
 
-	//Start the final explosion if the time is over
+	// Start the final explosion if the time is over
 	if(NeedFinalExplosion)
 	{
-		switch(m_FinalExplosionState)
-		{
-		case EFinalExplosionState::NotStarted:
-			StartFinalExplosion();
-			break;
-		case EFinalExplosionState::Started:
-			ProgressFinalExplosion();
-			break;
-		case EFinalExplosionState::Finished:
-			break;
-		}
+		EnsureFinalExplosionIsStarted();
 	}
 
 	//If no more explosions, game over, decide who win
