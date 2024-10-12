@@ -41,6 +41,9 @@ public:
 	void SetPos(const vec2 &Position);
 	void SetAnimatedPos(const vec2 &Pivot, const vec2 &RelPosition, int PosEnv);
 
+	vec2 GetVelocity() const { return m_Velocity; }
+	void SetVelocity(vec2 Velocity) { m_Velocity = Velocity; }
+
 	float GetLifespan() const;
 	void SetLifespan(float Lifespan);
 	void ResetLifespan();
@@ -51,6 +54,7 @@ protected:
 	void SyncPosition();
 
 	int m_Owner = 0;
+	vec2 m_Velocity{};
 	std::optional<int> m_EndTick;
 	vec2 m_Pivot;
 	vec2 m_RelPosition;

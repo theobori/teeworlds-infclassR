@@ -81,6 +81,10 @@ void CInfCEntity::Tick()
 	{
 		SyncPosition();
 	}
+	else
+	{
+		m_Pos += m_Velocity;
+	}
 }
 
 void CInfCEntity::TickPaused()
