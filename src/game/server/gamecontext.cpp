@@ -1269,6 +1269,7 @@ void CGameContext::OnTick()
 	CheckPureTuning();
 	
 	m_Collision.SetTime(m_pController->GetTime());
+	m_World.SetGameTick(Server()->Tick());
 
 	m_pController->TickBeforeWorld();
 

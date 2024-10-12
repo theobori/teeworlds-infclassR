@@ -384,3 +384,8 @@ void CGameWorld::ReleaseHooked(int ClientId)
 		}
 	}
 }
+
+void CGameWorld::SetGameTick(int Tick)
+{
+	m_GameTick = Tick;
+}

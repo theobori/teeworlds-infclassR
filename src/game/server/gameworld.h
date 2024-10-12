@@ -195,6 +195,12 @@ public:
 	void Tick();
 
 	void ReleaseHooked(int ClientId);
+
+	int GameTick() const { return m_GameTick; }
+	void SetGameTick(int Tick);
+
+private:
+	int m_GameTick{};
 };
 
 #endif
