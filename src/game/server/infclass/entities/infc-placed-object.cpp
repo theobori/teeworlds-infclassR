@@ -17,6 +17,16 @@ CPlacedObject::~CPlacedObject()
 	Server()->SnapFreeId(m_InfClassObjectId);
 }
 
+void CPlacedObject::Tick()
+{
+	CInfCEntity::Tick();
+
+	if(m_Pos2.has_value())
+	{
+		m_Pos2.value() += m_Velocity;
+	}
+}
+
 bool CPlacedObject::DoSnapForClient(int SnappingClient)
 {
 	if(NetworkClipped(SnappingClient) && (!m_Pos2.has_value() || NetworkClipped(SnappingClient, m_Pos2.value())))

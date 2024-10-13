@@ -13,6 +13,8 @@ public:
 
 	bool HasSecondPosition() const { return m_Pos2.has_value(); }
 
+	void Tick() override;
+
 protected:
 	bool DoSnapForClient(int SnappingClient) override;
 
