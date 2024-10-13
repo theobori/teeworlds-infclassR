@@ -91,7 +91,7 @@ void CLooperWall::Tick()
 			continue;
 
 		vec2 IntersectPos;
-		if(!closest_point_on_line(m_Pos, m_Pos2, p->m_Pos, IntersectPos))
+		if(!closest_point_on_line(m_Pos, m_Pos2.value(), p->m_Pos, IntersectPos))
 			continue;
 
 		float Len = distance(p->m_Pos, IntersectPos);
@@ -154,7 +154,8 @@ void CLooperWall::Snap(int SnappingClient)
 	}
 
 	const bool AntiPing = pDestPlayer && pDestPlayer->GetAntiPingEnabled();
-	vec2 dirVec = vec2(m_Pos.x-m_Pos2.x, m_Pos.y-m_Pos2.y);
+	vec2 Pos2 = m_Pos2.value();
+	vec2 dirVec = vec2(m_Pos.x-Pos2.x, m_Pos.y-Pos2.y);
 	vec2 dirVecN = normalize(dirVec);
 	vec2 dirVecT = vec2(dirVecN.y * g_Thickness * 0.5f, -dirVecN.x * g_Thickness * 0.5f);
 
@@ -167,19 +168,19 @@ void CLooperWall::Snap(int SnappingClient)
 		}
 
 		// draws the first two dots + the lasers
-		GameServer()->SnapLaserObject(Context, m_Ids[i], m_Pos + dirVecT, m_Pos2 + dirVecT, m_SnapStartTick);
+		GameServer()->SnapLaserObject(Context, m_Ids[i], m_Pos + dirVecT, Pos2 + dirVecT, m_SnapStartTick);
 
 		// draws one dot at the end of each laser
 		if(!AntiPing)
 		{
-			GameServer()->SnapLaserObject(Context, m_EndPointIds[i], m_Pos2 + dirVecT, m_Pos2 + dirVecT, Server()->Tick());
+			GameServer()->SnapLaserObject(Context, m_EndPointIds[i], Pos2 + dirVecT, Pos2 + dirVecT, Server()->Tick());
 		}
 	}
 
 	// draw particles inside wall
 	if(!AntiPing)
 	{
-		vec2 startPos = vec2(m_Pos2.x+dirVecT.x, m_Pos2.y+dirVecT.y);
+		vec2 startPos = vec2(Pos2.x+dirVecT.x, Pos2.y+dirVecT.y);
 		dirVecT.x = -dirVecT.x*2.0f;
 		dirVecT.y = -dirVecT.y*2.0f;
 

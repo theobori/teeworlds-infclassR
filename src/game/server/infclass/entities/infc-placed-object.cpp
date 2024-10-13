@@ -19,7 +19,7 @@ CPlacedObject::~CPlacedObject()
 
 bool CPlacedObject::DoSnapForClient(int SnappingClient)
 {
-	if(NetworkClipped(SnappingClient) && (!HasSecondPosition() || NetworkClipped(SnappingClient, m_Pos2)))
+	if(NetworkClipped(SnappingClient) && (!m_Pos2.has_value() || NetworkClipped(SnappingClient, m_Pos2.value())))
 		return false;
 
 	CInfClassCharacter *pCharacter = GameController()->GetCharacter(SnappingClient);
@@ -46,10 +46,10 @@ CNetObj_InfClassObject *CPlacedObject::SnapInfClassObject()
 	pInfClassObject->m_StartTick = 0;
 	pInfClassObject->m_EndTick = m_EndTick.value_or(0);
 
-	if(m_InfClassObjectFlags & INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION)
+	if(m_Pos2.has_value())
 	{
-		pInfClassObject->m_X2 = m_Pos2.x;
-		pInfClassObject->m_Y2 = m_Pos2.y;
+		pInfClassObject->m_X2 = m_Pos2.value().x;
+		pInfClassObject->m_Y2 = m_Pos2.value().y;
 	}
 	else
 	{

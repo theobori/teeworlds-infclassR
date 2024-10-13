@@ -25,7 +25,6 @@ CEngineerWall::CEngineerWall(CGameContext *pGameContext, vec2 Pos1, int Owner)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_LASER_WALL;
 	m_EndPointId = Server()->SnapNewId();
-	m_Pos2 = Pos1;
 
 	GameWorld()->InsertEntity(this);
 }
@@ -72,7 +71,7 @@ void CEngineerWall::Tick()
 			continue;
 
 		vec2 IntersectPos;
-		if(!closest_point_on_line(m_Pos, m_Pos2, p->m_Pos, IntersectPos))
+		if(!closest_point_on_line(m_Pos, m_Pos2.value(), p->m_Pos, IntersectPos))
 			continue;
 
 		float Len = distance(p->m_Pos, IntersectPos);
@@ -125,11 +124,11 @@ void CEngineerWall::Snap(int SnappingClient)
 	int SnappingClientVersion = GameServer()->GetClientVersion(SnappingClient);
 	CSnapContext Context(SnappingClientVersion);
 
-	GameServer()->SnapLaserObject(Context, GetId(), m_Pos, m_Pos2, m_SnapStartTick, m_Owner);
+	GameServer()->SnapLaserObject(Context, GetId(), m_Pos, m_Pos2.value_or(m_Pos), m_SnapStartTick, m_Owner);
 
 	if(HasSecondPosition())
 	{
-		GameServer()->SnapLaserObject(Context, m_EndPointId, m_Pos2, m_Pos2, Server()->Tick(), m_Owner);
+		GameServer()->SnapLaserObject(Context, m_EndPointId, m_Pos2.value(), m_Pos2.value(), Server()->Tick(), m_Owner);
 	}
 }
 

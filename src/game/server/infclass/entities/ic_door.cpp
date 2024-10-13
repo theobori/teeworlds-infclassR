@@ -25,7 +25,7 @@ void CDoor::Destroy()
 
 void CDoor::SetCollisions(bool Set)
 {
-	const vec2 DoorVector = m_Pos2 - m_Pos;
+	const vec2 DoorVector = m_Pos2.value() - m_Pos;
 	const float Distance = length(DoorVector);
 
 	int PrevIndex = -1;
@@ -51,7 +51,7 @@ void CDoor::SetCollisions(bool Set)
 			ProcessedDistance += Step;
 		}
 	}
-	SetOncePerTile(m_Pos2);
+	SetOncePerTile(m_Pos2.value());
 }
 
 void CDoor::Reset()
@@ -66,7 +66,7 @@ void CDoor::Snap(int SnappingClientId)
 	int SnappingClientVersion = GameServer()->GetClientVersion(SnappingClientId);
 
 	vec2 To = m_Pos;
-	vec2 From = IsOpen() ? m_Pos : m_Pos2;
+	vec2 From = IsOpen() ? m_Pos : m_Pos2.value();
 	int StartTick = 0;
 
 	if(SnappingClientVersion < VERSION_DDNET_ENTITY_NETOBJS)
@@ -77,15 +77,15 @@ void CDoor::Snap(int SnappingClientId)
 	const bool ForcedShowOpen = Config()->m_SvShowOpenDoors && IsOpen();
 	if(ForcedShowOpen)
 	{
-		From = m_Pos2;
+		From = m_Pos2.value();
 	}
 	int MaxY = Collision()->GetHeight() * TileSize;
 	if((From != To) && ViewParams.has_value())
 	{
-		if(m_Pos.x == m_Pos2.x)
+		if(m_Pos.x == m_Pos2.value().x)
 		{
-			const bool AutoextendTop = ((m_Pos.y < 32) || (m_Pos2.y < 32));
-			const bool AutoextendBottom = ((m_Pos.y >= MaxY) || (m_Pos2.y >= MaxY));
+			const bool AutoextendTop = ((m_Pos.y < 32) || (m_Pos2.value().y < 32));
+			const bool AutoextendBottom = ((m_Pos.y >= MaxY) || (m_Pos2.value().y >= MaxY));
 
 			if(AutoextendTop)
 			{
