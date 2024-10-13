@@ -2319,6 +2319,7 @@ void CInfClassCharacter::GrantSpawnProtection(float Duration)
 void CInfClassCharacter::PreCoreTick()
 {
 	m_InputBackup = m_Input;
+	const int CurrentTick = Server()->Tick();
 
 	--m_FrozenTime;
 	if(m_IsFrozen)
@@ -2343,6 +2344,14 @@ void CInfClassCharacter::PreCoreTick()
 			int SloMoSec = 1 + (m_SlowMotionTick / Server()->TickSpeed());
 			GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE, BROADCAST_DURATION_REALTIME, _("You are slowed: {sec:EffectDuration}"), "EffectDuration", &SloMoSec, NULL);
 		}
+	}
+
+	if(m_SoloUntilTick > CurrentTick)
+	{
+		const int SoloTicks = m_SoloUntilTick - CurrentTick;
+		int EffectDuration = 1 + (SoloTicks / Server()->TickSpeed());
+		GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE,
+			BROADCAST_DURATION_REALTIME, _("You are in Solo mode for {sec:EffectDuration}"), "EffectDuration", &EffectDuration, nullptr);
 	}
 
 	if(m_AntiFireTime > 0)
