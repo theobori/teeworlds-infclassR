@@ -321,7 +321,7 @@ void CInfClassHuman::OnPlayerSnap(int SnappingClient, int InfClassVersion)
 					continue;
 				}
 
-				pClassInfo->m_Data1 = pWall->GetEndTick();
+				pClassInfo->m_Data1 = pWall->GetEndTick().value_or(-1);
 				break;
 			}
 			break;
@@ -1381,7 +1381,7 @@ void CInfClassHuman::BroadcastWeaponState() const
 
 		if(pOwnWall && pOwnWall->HasSecondPosition())
 		{
-			int RemainingTicks = pOwnWall->GetEndTick() - CurrentTick;
+			int RemainingTicks = pOwnWall->GetEndTick().value() - CurrentTick;
 			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
 			GameServer()->SendBroadcast_Localization(GetCid(),
 				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
@@ -1810,6 +1810,12 @@ void CInfClassHuman::PlaceLooperWall(WeaponFireContext *pFireContext)
 		if(pFireContext->FireAccepted)
 		{
 			pExistingWall->SetEndPosition(GetPos());
+			float LifeSpanFactor = 1.0f;
+			if(GameController()->GetRoundType() == ERoundType::Survival)
+			{
+				LifeSpanFactor *= 0.5f;
+			}
+			pExistingWall->SetLifespan(Config()->m_InfLooperBarrierLifeSpan * LifeSpanFactor);
 			GameServer()->CreateSound(GetPos(), SOUND_LASER_FIRE);
 		}
 		else
