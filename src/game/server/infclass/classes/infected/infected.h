@@ -43,6 +43,7 @@ public:
 
 	void OnHookAttachedPlayer() override;
 
+	void OnWeaponFired(WeaponFireContext *pFireContext) override;
 	void OnHammerFired(WeaponFireContext *pFireContext) override;
 
 	void OnSlimeEffect(int Owner, int Damage, float DamageInterval) override;
@@ -71,6 +72,7 @@ protected:
 	void SpiderPreCoreTick();
 	bool HasDrainingHook() const;
 	bool HasHumansNearby();
+	void ResetInvisibility();
 
 	int m_HookDmgTick = 0;
 	int m_SlimeEffectTicks = 0;
