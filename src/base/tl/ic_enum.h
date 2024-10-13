@@ -38,6 +38,7 @@ template<typename T, int NamesCount>
 template<typename T>
 [[nodiscard]] T fromString(const char *pString)
 {
+	dbg_assert(pString != nullptr, "Invalid 'fromString()' called with nullptr");
 	for(int i = 0; i < GetEnumKeysCount<T>(); ++i)
 	{
 		const T Value = static_cast<T>(i);
