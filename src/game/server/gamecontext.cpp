@@ -4837,6 +4837,8 @@ void CGameContext::OnMapChange(char *pNewMapName, int MapNameSize)
 
 void CGameContext::OnShutdown(const void *pPersistentData)
 {
+	m_pController->OnShutdown();
+
 	CPersistentData *pPersistent = (CPersistentData *)pPersistentData;
 
 	if(pPersistent)

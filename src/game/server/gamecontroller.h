@@ -135,6 +135,7 @@ public:
 	virtual void OnPlayerDisconnect(CPlayer *pPlayer, EClientDropType Type, const char *pReason);
 
 	virtual void OnReset();
+	virtual void OnShutdown() {};
 
 	// game
 	void DoWarmup(int Seconds);
