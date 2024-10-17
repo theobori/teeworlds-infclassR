@@ -106,7 +106,24 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 	}
 	
 	m_pGrowingMap[m_MaxGrowing*m_GrowingMap_Length+m_MaxGrowing] = Server()->Tick();
-	
+
+	if(m_ExplosionEffect == EGrowingExplosionEffect::ELECTRIFY_INFECTED)
+	{
+		if(Dir.x || Dir.y)
+		{
+			int DirX = Dir.x > 0 ? 1 : (Dir.x < 0 ? -1 : 0);
+			int DirY = Dir.y > 0 ? 1 : (Dir.y < 0 ? -1 : 0);
+			if (DirX * Dir.x >= DirY * Dir.y)
+			{
+				m_pGrowingMap[m_MaxGrowing * m_GrowingMap_Length + m_MaxGrowing + DirX] = AvailableForGrow;
+			}
+			else
+			{
+				m_pGrowingMap[(m_MaxGrowing + DirY) * m_GrowingMap_Length + m_MaxGrowing] = AvailableForGrow;
+			}
+		}
+	}
+
 	switch(m_ExplosionEffect)
 	{
 	case EGrowingExplosionEffect::FREEZE_INFECTED:
