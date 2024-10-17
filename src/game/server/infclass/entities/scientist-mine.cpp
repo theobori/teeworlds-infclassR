@@ -41,9 +41,9 @@ void CScientistMine::SetExplosionRadius(int Tiles)
 	m_ExplosionRadius = Tiles;
 }
 
-void CScientistMine::Explode(int DetonatedBy)
+void CScientistMine::Explode(int DetonatedBy, vec2 Direction)
 {
-	new CGrowingExplosion(GameServer(), m_Pos, vec2(0.0, -1.0), m_Owner, m_ExplosionRadius, EDamageType::SCIENTIST_MINE);
+	new CGrowingExplosion(GameServer(), m_Pos, Direction, m_Owner, m_ExplosionRadius, EDamageType::SCIENTIST_MINE);
 	GameWorld()->DestroyEntity(this);
 	
 	//Self damage
@@ -123,28 +123,28 @@ void CScientistMine::Tick()
 		return;
 
 	// Find other players
-	bool MustExplode = false;
-	int DetonatedBy;
-	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
-	{
-		if(p->IsHuman()) continue;
-		if(!p->CanDie()) continue;
+	CInfClassCharacter *pTriggerCharacter = nullptr;
+	float ClosestLength = CCharacterCore::PhysicalSize() + GetProximityRadius();
 
-		float Len = distance(p->GetPos(), m_Pos);
-		if(Len < p->GetProximityRadius() + GetProximityRadius())
+	for(TEntityPtr<CInfClassCharacter> pChr = GameWorld()->FindFirst<CInfClassCharacter>(); pChr; ++pChr)
+	{
+		if(!pChr->IsInfected() || !pChr->CanDie())
+			continue;
+
+		float Len = distance(pChr->GetPos(), GetPos());
+
+		if(Len < ClosestLength)
 		{
-			MustExplode = true;
-			DetonatedBy = p->GetCid();
-			if(DetonatedBy < 0)
-			{
-				DetonatedBy = m_Owner;
-			}
-			break;
+			ClosestLength = Len;
+			pTriggerCharacter = pChr;
 		}
 	}
-	
-	if(MustExplode)
-		Explode(DetonatedBy);
+
+	if(pTriggerCharacter)
+	{
+		const vec2 Direction = (pTriggerCharacter->GetPos() - GetPos()) / ClosestLength;
+		Explode(pTriggerCharacter->GetCid(), Direction);
+	}
 }
 
 void CScientistMine::TickPaused()

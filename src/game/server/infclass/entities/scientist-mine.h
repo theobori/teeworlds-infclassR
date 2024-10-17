@@ -27,7 +27,7 @@ public:
 	void TickPaused() override;
 	void Tick() override;
 
-	void Explode(int DetonatedBy);
+	void Explode(int DetonatedBy, vec2 Direction);
 
 private:
 	int m_Ids[NUM_IDS];
