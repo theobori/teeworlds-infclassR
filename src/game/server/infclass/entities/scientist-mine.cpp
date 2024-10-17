@@ -15,7 +15,8 @@
 int CScientistMine::EntityId = CGameWorld::ENTTYPE_SCIENTIST_MINE;
 
 CScientistMine::CScientistMine(CGameContext *pGameContext, vec2 Pos, int Owner) :
-	CPlacedObject(pGameContext, EntityId, Pos, Owner, pGameContext->Config()->m_InfMineRadius)
+	CPlacedObject(pGameContext, EntityId, Pos, Owner, pGameContext->Config()->m_InfMineRadius),
+	m_ExplosionRadius(6)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_SCIENTIST_MINE;
 	GameWorld()->InsertEntity(this);
@@ -35,9 +36,14 @@ CScientistMine::~CScientistMine()
 	}
 }
 
+void CScientistMine::SetExplosionRadius(int Tiles)
+{
+	m_ExplosionRadius = Tiles;
+}
+
 void CScientistMine::Explode(int DetonatedBy)
 {
-	new CGrowingExplosion(GameServer(), m_Pos, vec2(0.0, -1.0), m_Owner, 6, EDamageType::SCIENTIST_MINE);
+	new CGrowingExplosion(GameServer(), m_Pos, vec2(0.0, -1.0), m_Owner, m_ExplosionRadius, EDamageType::SCIENTIST_MINE);
 	GameWorld()->DestroyEntity(this);
 	
 	//Self damage

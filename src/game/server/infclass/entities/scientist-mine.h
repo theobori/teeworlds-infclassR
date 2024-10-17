@@ -21,6 +21,8 @@ public:
 	CScientistMine(CGameContext *pGameContext, vec2 Pos, int Owner);
 	~CScientistMine() override;
 
+	void SetExplosionRadius(int Tiles);
+
 	void Snap(int SnappingClient) override;
 	void TickPaused() override;
 	void Tick() override;
@@ -29,6 +31,7 @@ public:
 
 private:
 	int m_Ids[NUM_IDS];
+	int m_ExplosionRadius{};
 	
 public:
 	int m_StartTick;
