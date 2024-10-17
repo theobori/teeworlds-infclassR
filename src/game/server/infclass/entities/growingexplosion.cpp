@@ -18,7 +18,7 @@ constexpr int UnavailableTile = -2;
 
 } // namespace
 
-CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, GROWING_EXPLOSION_EFFECT ExplosionEffect) :
+CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, EGrowingExplosionEffect ExplosionEffect) :
 	CGrowingExplosion(pGameContext, Pos, Dir, Owner, Radius, EDamageType::NO_DAMAGE)
 {
 	m_ExplosionEffect = ExplosionEffect;
@@ -35,22 +35,22 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 	switch(DamageType)
 	{
 		case EDamageType::STUNNING_GRENADE:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::FREEZE_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::FREEZE_INFECTED;
 			break;
 		case EDamageType::MERCENARY_GRENADE:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::POISON_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::POISON_INFECTED;
 			break;
 		case EDamageType::MERCENARY_BOMB:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::BOOM_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::BOOM_INFECTED;
 			break;
 		case EDamageType::SCIENTIST_LASER:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::BOOM_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::BOOM_INFECTED;
 			break;
 		case EDamageType::SCIENTIST_MINE:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::ELECTRIC_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::ELECTRIFY_INFECTED;
 			break;
 		case EDamageType::WHITE_HOLE:
-			m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::BOOM_INFECTED;
+			m_ExplosionEffect = EGrowingExplosionEffect::BOOM_INFECTED;
 			break;
 		default:
 			break;
@@ -109,19 +109,19 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 	
 	switch(m_ExplosionEffect)
 	{
-	case GROWING_EXPLOSION_EFFECT::FREEZE_INFECTED:
+	case EGrowingExplosionEffect::FREEZE_INFECTED:
 		if(random_prob(0.1f))
 		{
 			GameServer()->CreateHammerHit(m_SeedPos);
 		}
 		break;
-	case GROWING_EXPLOSION_EFFECT::POISON_INFECTED:
+	case EGrowingExplosionEffect::POISON_INFECTED:
 		if(random_prob(0.1f))
 		{
 			GameServer()->CreateDeath(m_SeedPos, m_Owner);
 		}
 		break;
-	case GROWING_EXPLOSION_EFFECT::ELECTRIC_INFECTED:
+	case EGrowingExplosionEffect::ELECTRIFY_INFECTED:
 	{
 		//~ GameServer()->CreateHammerHit(m_SeedPos);
 
@@ -167,38 +167,38 @@ void CGrowingExplosion::Tick()
 					vec2 TileCenter = m_SeedPos + vec2(32.0f*(i-m_MaxGrowing) - 16.0f + random_float()*32.0f, 32.0f*(j-m_MaxGrowing) - 16.0f + random_float()*32.0f);
 					switch(m_ExplosionEffect)
 					{
-					case GROWING_EXPLOSION_EFFECT::FREEZE_INFECTED:
+					case EGrowingExplosionEffect::FREEZE_INFECTED:
 						if(random_prob(0.1f))
 						{
 							GameServer()->CreateHammerHit(TileCenter);
 						}
 						break;
-					case GROWING_EXPLOSION_EFFECT::POISON_INFECTED:
+					case EGrowingExplosionEffect::POISON_INFECTED:
 						if(random_prob(0.1f))
 						{
 							GameServer()->CreateDeath(TileCenter, m_Owner);
 						}
 						break;
-					case GROWING_EXPLOSION_EFFECT::HEAL_HUMANS:
+					case EGrowingExplosionEffect::HEAL_HUMANS:
 						if(m_VisualizedTiles % 8 == 0)
 						{
 							GameServer()->CreateDeath(TileCenter, m_Owner);
 						}
 						break;
-					case GROWING_EXPLOSION_EFFECT::LOVE_INFECTED:
+					case EGrowingExplosionEffect::LOVE_INFECTED:
 						if(random_prob(0.2f))
 						{
 							GameServer()->CreateLoveEvent(TileCenter);
 						}
 						break;
-					case GROWING_EXPLOSION_EFFECT::BOOM_INFECTED:
+					case EGrowingExplosionEffect::BOOM_INFECTED:
 						if(random_prob(0.2f))
 						{
 							float DamageFactor = m_DamageType == EDamageType::MERCENARY_BOMB ? 0 : 1;
 							GameController()->CreateExplosion(TileCenter, m_Owner, m_DamageType, DamageFactor);
 						}
 						break;
-					case GROWING_EXPLOSION_EFFECT::ELECTRIC_INFECTED:
+					case EGrowingExplosionEffect::ELECTRIFY_INFECTED:
 					{
 						vec2 EndPoint = m_SeedPos + vec2(32.0f*(i-m_MaxGrowing) - 16.0f + random_float()*32.0f, 32.0f*(j-m_MaxGrowing) - 16.0f + random_float()*32.0f);
 						m_pGrowingMapVec[j*m_GrowingMap_Length+i] = EndPoint;
@@ -247,7 +247,7 @@ void CGrowingExplosion::Tick()
 	{
 		switch(m_ExplosionEffect)
 		{
-		case GROWING_EXPLOSION_EFFECT::POISON_INFECTED:
+		case EGrowingExplosionEffect::POISON_INFECTED:
 			if(random_prob(0.1f))
 			{
 				GameServer()->CreateSound(m_Pos, SOUND_PLAYER_DIE);
@@ -278,7 +278,7 @@ void CGrowingExplosion::Tick()
 			{
 				switch(m_ExplosionEffect)
 				{
-				case GROWING_EXPLOSION_EFFECT::HEAL_HUMANS:
+				case EGrowingExplosionEffect::HEAL_HUMANS:
 					if(!p->IsHuman())
 					{
 						continue;
@@ -286,7 +286,7 @@ void CGrowingExplosion::Tick()
 					p->GiveArmor(1, GetOwner());
 					m_Hit[p->GetCid()] = true;
 					break;
-				case GROWING_EXPLOSION_EFFECT::BOOM_INFECTED:
+				case EGrowingExplosionEffect::BOOM_INFECTED:
 				{
 					ProcessMercenaryBombHit(p);
 					break;
@@ -306,12 +306,12 @@ void CGrowingExplosion::Tick()
 			{
 				switch(m_ExplosionEffect)
 				{
-				case GROWING_EXPLOSION_EFFECT::FREEZE_INFECTED:
+				case EGrowingExplosionEffect::FREEZE_INFECTED:
 					p->Freeze(3.0f, m_Owner, FREEZEREASON_FLASH);
 					GameServer()->SendEmoticon(p->GetCid(), EMOTICON_QUESTION);
 					m_Hit[p->GetCid()] = true;
 					break;
-				case GROWING_EXPLOSION_EFFECT::POISON_INFECTED:
+				case EGrowingExplosionEffect::POISON_INFECTED:
 				{
 					int Damage = maximum(Config()->m_InfPoisonDamage, 1);
 					const float PoisonDurationSeconds = Config()->m_InfPoisonDuration / 1000.0;
@@ -323,22 +323,22 @@ void CGrowingExplosion::Tick()
 					GameServer()->SendEmoticon(p->GetCid(), EMOTICON_DROP);
 					m_Hit[p->GetCid()] = true;
 					break;
-				case GROWING_EXPLOSION_EFFECT::HEAL_HUMANS:
+				case EGrowingExplosionEffect::HEAL_HUMANS:
 					// empty
 					break;
-				case GROWING_EXPLOSION_EFFECT::BOOM_INFECTED:
+				case EGrowingExplosionEffect::BOOM_INFECTED:
 				{
 					m_Hit[p->GetCid()] = true;
 					break;
 				}
-				case GROWING_EXPLOSION_EFFECT::LOVE_INFECTED:
+				case EGrowingExplosionEffect::LOVE_INFECTED:
 				{
 					p->LoveEffect(5);
 					GameServer()->SendEmoticon(p->GetCid(), EMOTICON_HEARTS);
 					m_Hit[p->GetCid()] = true;
 					break;
 				}
-				case GROWING_EXPLOSION_EFFECT::ELECTRIC_INFECTED:
+				case EGrowingExplosionEffect::ELECTRIFY_INFECTED:
 				{
 					int Damage = GetActualDamage();
 					if(Damage)
@@ -356,7 +356,7 @@ void CGrowingExplosion::Tick()
 	}
 
 	// clean slug slime
-	if (m_ExplosionEffect == GROWING_EXPLOSION_EFFECT::FREEZE_INFECTED)
+	if (m_ExplosionEffect == EGrowingExplosionEffect::FREEZE_INFECTED)
 	{
 		for(TEntityPtr<CEntity> e = GameWorld()->FindFirst(CGameWorld::ENTTYPE_SLUG_SLIME); e; ++e)
 		{

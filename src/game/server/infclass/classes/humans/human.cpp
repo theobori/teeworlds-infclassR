@@ -1982,7 +1982,7 @@ void CInfClassHuman::OnMercGrenadeFired(WeaponFireContext *pFireContext)
 void CInfClassHuman::OnMedicGrenadeFired(WeaponFireContext *pFireContext)
 {
 	int HealingExplosionRadius = 4;
-	new CGrowingExplosion(GameServer(), GetPos(), GetDirection(), GetCid(), HealingExplosionRadius, GROWING_EXPLOSION_EFFECT::HEAL_HUMANS);
+	new CGrowingExplosion(GameServer(), GetPos(), GetDirection(), GetCid(), HealingExplosionRadius, EGrowingExplosionEffect::HEAL_HUMANS);
 
 	GameServer()->CreateSound(GetPos(), SOUND_GRENADE_FIRE);
 }
