@@ -11,6 +11,13 @@
 
 #include "infccharacter.h"
 
+namespace {
+
+constexpr int AvailableForGrow = -1;
+constexpr int UnavailableTile = -2;
+
+} // namespace
+
 CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, GROWING_EXPLOSION_EFFECT ExplosionEffect) :
 	CGrowingExplosion(pGameContext, Pos, Dir, Owner, Radius, EDamageType::NO_DAMAGE)
 {
@@ -18,9 +25,10 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 }
 
 CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, EDamageType DamageType) :
-	CInfCEntity(pGameContext, CGameWorld::ENTTYPE_GROWINGEXPLOSION, Pos, Owner)
+	CInfCEntity(pGameContext, CGameWorld::ENTTYPE_GROWINGEXPLOSION, Pos, Owner),
+	m_MaxGrowing(Radius),
+	m_DamageType(DamageType)
 {
-	m_DamageType = DamageType;
 	m_TriggeredByCid = Owner;
 	CInfClassGameController::DamageTypeToWeapon(DamageType, &m_TakeDamageMode);
 
@@ -48,7 +56,6 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 			break;
 	}
 
-	m_MaxGrowing = Radius;
 	m_GrowingMap_Length = (2*m_MaxGrowing+1);
 	m_GrowingMap_Size = (m_GrowingMap_Length * m_GrowingMap_Length);
 
@@ -87,11 +94,11 @@ CGrowingExplosion::CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 
 			vec2 Tile = m_SeedPos + vec2(32.0f*(i-m_MaxGrowing), 32.0f*(j-m_MaxGrowing));
 			if(GameServer()->Collision()->CheckPoint(Tile) || distance(Tile, m_SeedPos) > m_MaxGrowing*32.0f)
 			{
-				m_pGrowingMap[j*m_GrowingMap_Length+i] = -2;
+				m_pGrowingMap[j*m_GrowingMap_Length+i] = UnavailableTile;
 			}
 			else
 			{
-				m_pGrowingMap[j*m_GrowingMap_Length+i] = -1;
+				m_pGrowingMap[j*m_GrowingMap_Length+i] = AvailableForGrow;
 			}
 			
 			m_pGrowingMapVec[j*m_GrowingMap_Length+i] = vec2(0.0f, 0.0f);
@@ -145,7 +152,7 @@ void CGrowingExplosion::Tick()
 	{
 		for(int i=0; i<m_GrowingMap_Length; i++)
 		{
-			if(m_pGrowingMap[j*m_GrowingMap_Length+i] == -1)
+			if(m_pGrowingMap[j*m_GrowingMap_Length+i] == AvailableForGrow)
 			{
 				bool FromLeft = (i > 0 && m_pGrowingMap[j*m_GrowingMap_Length+i-1] < tick && m_pGrowingMap[j*m_GrowingMap_Length+i-1] >= 0);
 				bool FromRight = (i < m_GrowingMap_Length-1 && m_pGrowingMap[j*m_GrowingMap_Length+i+1] < tick && m_pGrowingMap[j*m_GrowingMap_Length+i+1] >= 0);
@@ -196,35 +203,30 @@ void CGrowingExplosion::Tick()
 						vec2 EndPoint = m_SeedPos + vec2(32.0f*(i-m_MaxGrowing) - 16.0f + random_float()*32.0f, 32.0f*(j-m_MaxGrowing) - 16.0f + random_float()*32.0f);
 						m_pGrowingMapVec[j*m_GrowingMap_Length+i] = EndPoint;
 
-						int NumPossibleStartPoint = 0;
-						vec2 PossibleStartPoint[4];
+						icArray<vec2, 4> aPossibleStartPoints;
 
 						if(FromLeft)
 						{
-							PossibleStartPoint[NumPossibleStartPoint] = m_pGrowingMapVec[j*m_GrowingMap_Length+i-1];
-							NumPossibleStartPoint++;
+							aPossibleStartPoints.Add(m_pGrowingMapVec[j * m_GrowingMap_Length + i - 1]);
 						}
 						if(FromRight)
 						{
-							PossibleStartPoint[NumPossibleStartPoint] = m_pGrowingMapVec[j*m_GrowingMap_Length+i+1];
-							NumPossibleStartPoint++;
+							aPossibleStartPoints.Add(m_pGrowingMapVec[j * m_GrowingMap_Length + i + 1]);
 						}
 						if(FromTop)
 						{
-							PossibleStartPoint[NumPossibleStartPoint] = m_pGrowingMapVec[(j-1)*m_GrowingMap_Length+i];
-							NumPossibleStartPoint++;
+							aPossibleStartPoints.Add(m_pGrowingMapVec[(j - 1) * m_GrowingMap_Length + i]);
 						}
 						if(FromBottom)
 						{
-							PossibleStartPoint[NumPossibleStartPoint] = m_pGrowingMapVec[(j+1)*m_GrowingMap_Length+i];
-							NumPossibleStartPoint++;
+							aPossibleStartPoints.Add(m_pGrowingMapVec[(j + 1) * m_GrowingMap_Length + i]);
 						}
 
-						if(NumPossibleStartPoint > 0)
+						if(!aPossibleStartPoints.IsEmpty())
 						{
-							int randNb = random_int(0, NumPossibleStartPoint-1);
-							vec2 StartPoint = PossibleStartPoint[randNb];
-							GameServer()->CreateLaserDotEvent(StartPoint, EndPoint, Server()->TickSpeed()/6);
+							int randNb = random_int(0, aPossibleStartPoints.Size() - 1);
+							vec2 StartPoint = aPossibleStartPoints.At(randNb);
+							GameServer()->CreateLaserDotEvent(StartPoint, EndPoint, Server()->TickSpeed() / 6);
 						}
 
 						if(random_prob(0.1f))
@@ -388,12 +390,12 @@ void CGrowingExplosion::SetDamage(int Damage)
 
 int CGrowingExplosion::GetActualDamage()
 {
-	 if(m_Damage < 0)
-		 return 5 + 20.0f * (m_MaxGrowing - minimum(Server()->Tick() - m_StartTick, m_MaxGrowing)) / m_MaxGrowing;
+	 if(m_Damage.has_value())
+		return m_Damage.value();
 
 	 // Sci mine victim is typically hit on 2nd tick.
 	 // It means 5 + 20 * (6 - 2) / 6 = 5 + 13.333 = 18 dmg
-	 return m_Damage;
+	 return 5 + 20.0f * (m_MaxGrowing - minimum(Server()->Tick() - m_StartTick, m_MaxGrowing)) / m_MaxGrowing;
 }
 
 void CGrowingExplosion::SetTriggeredBy(int CID)

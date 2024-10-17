@@ -58,7 +58,7 @@ private:
 	std::vector<vec2> m_pGrowingMapVec;
 	GROWING_EXPLOSION_EFFECT m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::INVALID;
 	bool m_Hit[MAX_CLIENTS];
-	int m_Damage = -1;
+	std::optional<int> m_Damage;
 };
 
 #endif // GAME_SERVER_ENTITIES_GROWINGEXPLOSION_H
