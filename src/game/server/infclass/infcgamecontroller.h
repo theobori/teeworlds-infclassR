@@ -24,8 +24,13 @@ struct ZoneData;
 enum class TAKEDAMAGEMODE;
 enum class EDamageType;
 enum class ROUND_CANCELATION_REASON;
-enum class ROUND_END_REASON;
 enum class EPlayerScoreMode;
+
+enum class ROUND_END_REASON
+{
+	FINISHED,
+	CANCELED,
+};
 
 static const int MaxWaves = 20;
 

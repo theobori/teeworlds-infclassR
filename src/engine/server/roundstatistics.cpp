@@ -173,7 +173,15 @@ int CRoundStatistics::PlayerScore(int ClientId)
 		return m_aPlayers[ClientId].m_Score/10;
 	else return 0;
 }
-	
+
+void CRoundStatistics::SetPlayerScore(int ClientId, int Score)
+{
+	if(ClientId >= 0 && ClientId < MAX_CLIENTS)
+	{
+		m_aPlayers[ClientId].m_Score = Score * 10;
+	}
+}
+
 int CRoundStatistics::NumWinners() const
 {
 	int NumWinner = 0;

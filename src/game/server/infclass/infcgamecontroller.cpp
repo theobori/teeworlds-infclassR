@@ -133,12 +133,6 @@ enum class ROUND_CANCELATION_REASON
 	EVERYONE_INFECTED_BY_THE_GAME,
 };
 
-enum class ROUND_END_REASON
-{
-	FINISHED,
-	CANCELED,
-};
-
 struct InfclassPlayerPersistantData : public CGameContext::CPersistentClientData
 {
 	EPlayerScoreMode m_ScoreMode = EPlayerScoreMode::Class;
