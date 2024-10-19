@@ -24,6 +24,8 @@ CEngineerWall::CEngineerWall(CGameContext *pGameContext, vec2 Pos1, int Owner)
 	: CPlacedObject(pGameContext, EntityId, Pos1, Owner)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_LASER_WALL;
+	m_MaxLength = g_BarrierMaxLength;
+
 	m_EndPointId = Server()->SnapNewId();
 
 	GameWorld()->InsertEntity(this);
@@ -32,20 +34,6 @@ CEngineerWall::CEngineerWall(CGameContext *pGameContext, vec2 Pos1, int Owner)
 CEngineerWall::~CEngineerWall()
 {
 	Server()->SnapFreeId(m_EndPointId);
-}
-
-void CEngineerWall::SetEndPosition(vec2 EndPosition)
-{
-	if(distance(m_Pos, EndPosition) > g_BarrierMaxLength)
-	{
-		m_Pos2 = m_Pos + normalize(EndPosition - m_Pos) * g_BarrierMaxLength;
-	}
-	else
-	{
-		m_Pos2 = EndPosition;
-	}
-
-	m_InfClassObjectFlags = INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION;
 }
 
 void CEngineerWall::Tick()

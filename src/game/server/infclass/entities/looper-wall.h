@@ -14,8 +14,6 @@ public:
 	CLooperWall(CGameContext *pGameContext, vec2 Pos, int Owner);
 	~CLooperWall() override;
 
-	void SetEndPosition(vec2 EndPosition);
-
 	void Tick() override;
 	void Snap(int SnappingClient) override;
 

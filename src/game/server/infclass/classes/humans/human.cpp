@@ -1760,7 +1760,7 @@ void CInfClassHuman::PlaceEngineerWall(WeaponFireContext *pFireContext)
 
 		if(pFireContext->FireAccepted)
 		{
-			pExistingWall->SetEndPosition(GetPos());
+			pExistingWall->SetSecondPosition(GetPos());
 			pExistingWall->SetLifespan(Config()->m_InfBarrierLifeSpan);
 			GameServer()->CreateSound(GetPos(), SOUND_LASER_FIRE);
 		}
@@ -1809,7 +1809,7 @@ void CInfClassHuman::PlaceLooperWall(WeaponFireContext *pFireContext)
 
 		if(pFireContext->FireAccepted)
 		{
-			pExistingWall->SetEndPosition(GetPos());
+			pExistingWall->SetSecondPosition(GetPos());
 			float LifeSpanFactor = 1.0f;
 			if(GameController()->GetRoundType() == ERoundType::Survival)
 			{

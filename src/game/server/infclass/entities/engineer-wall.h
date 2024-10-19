@@ -15,8 +15,6 @@ public:
 	CEngineerWall(CGameContext *pGameContext, vec2 Pos, int Owner);
 	~CEngineerWall() override;
 
-	void SetEndPosition(vec2 EndPosition);
-
 	void Tick() override;
 	void TickPaused() override;
 	void Snap(int SnappingClient) override;

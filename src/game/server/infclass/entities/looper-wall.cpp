@@ -24,6 +24,7 @@ CLooperWall::CLooperWall(CGameContext *pGameContext, vec2 Pos1, int Owner) :
 	CPlacedObject(pGameContext, EntityId, Pos1, Owner)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_LOOPER_WALL;
+	m_MaxLength = g_BarrierMaxLength;
 
 	for(int &Id : m_Ids)
 	{
@@ -55,20 +56,6 @@ CLooperWall::~CLooperWall()
 	{
 		Server()->SnapFreeId(Id);
 	}
-}
-
-void CLooperWall::SetEndPosition(vec2 EndPosition)
-{
-	if(distance(m_Pos, EndPosition) > g_BarrierMaxLength)
-	{
-		m_Pos2 = m_Pos + normalize(EndPosition - m_Pos) * g_BarrierMaxLength;
-	}
-	else
-	{
-		m_Pos2 = EndPosition;
-	}
-
-	m_InfClassObjectFlags = INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION;
 }
 
 void CLooperWall::Tick()

@@ -17,6 +17,20 @@ CPlacedObject::~CPlacedObject()
 	Server()->SnapFreeId(m_InfClassObjectId);
 }
 
+void CPlacedObject::SetSecondPosition(vec2 Position)
+{
+	if(m_MaxLength.value() && distance(m_Pos, Position) > m_MaxLength.value())
+	{
+		m_Pos2 = m_Pos + normalize(Position - m_Pos) * m_MaxLength.value();
+	}
+	else
+	{
+		m_Pos2 = Position;
+	}
+
+	m_InfClassObjectFlags = INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION;
+}
+
 void CPlacedObject::Tick()
 {
 	CInfCEntity::Tick();
