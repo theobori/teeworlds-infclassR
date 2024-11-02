@@ -868,6 +868,9 @@ void CInfClassInfected::GhostPreCoreTick()
 
 void CInfClassInfected::SpiderPreCoreTick()
 {
+	if(m_pCharacter->IsInLove())
+		return;
+
 	if(m_pCharacter->WebHookLength() > 48.0f && m_pCharacter->GetHookedPlayer() < 0)
 	{
 		// Find other players
