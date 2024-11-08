@@ -80,6 +80,7 @@ public:
 	
 	CRoundStatistics::CPlayerStats* PlayerStatistics(int ClientId);
 	int PlayerScore(int ClientId);
+	void SetPlayerScore(int ClientId, int Score);
 	
 	int NumWinners() const;
 	

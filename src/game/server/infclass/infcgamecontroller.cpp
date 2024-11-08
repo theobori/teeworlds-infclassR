@@ -13,6 +13,7 @@
 #include <game/server/infclass/entities/flyingpoint.h>
 #include <game/server/infclass/entities/infccharacter.h>
 #include <game/server/infclass/entities/ic-pickup.h>
+#include <game/server/infclass/entities/ic_door.h>
 #include <game/server/infclass/infcplayer.h>
 
 #include <base/tl/ic_array.h>
@@ -102,7 +103,8 @@ static const CHintMessage gs_aHintMessages[] = {
 	_("Sniper deals double as much damage in locked position."),
 	_("Scientist can use Taxi to teleport his teammates into safety."),
 	{
-		_("Scientist can get a white hole after {int:Kills} kills."),
+		_P("Scientist can get a white hole after {int:Kills} kill.",
+			"Scientist can get a white hole after {int:Kills} kills."),
 		"Kills",
 		&g_Config.m_InfWhiteHoleMinimalKills,
 	},
@@ -129,12 +131,6 @@ enum class ROUND_CANCELATION_REASON
 	INVALID,
 	ALL_INFECTED_LEFT_THE_GAME,
 	EVERYONE_INFECTED_BY_THE_GAME,
-};
-
-enum class ROUND_END_REASON
-{
-	FINISHED,
-	CANCELED,
 };
 
 struct InfclassPlayerPersistantData : public CGameContext::CPersistentClientData
@@ -171,7 +167,6 @@ CInfClassGameController::CInfClassGameController(class CGameContext *pGameServer
 	m_ZoneHandle_icTeleport = GameServer()->Collision()->GetZoneHandle("icTele");
 	m_ZoneHandle_icBonus = GameServer()->Collision()->GetZoneHandle("icBonus");
 
-	m_ExplosionStarted = false;
 	m_MapWidth = GameServer()->Collision()->GetWidth();
 	m_MapHeight = GameServer()->Collision()->GetHeight();
 	m_GrowingMap = new int[m_MapWidth*m_MapHeight];
@@ -196,6 +191,7 @@ CInfClassGameController::CInfClassGameController(class CGameContext *pGameServer
 		}
 	}
 
+	InitWeapons();
 	ReservePlayerOwnSnapItems();
 }
 
@@ -439,7 +435,7 @@ void CInfClassGameController::DoPlayerInfection(CInfClassPlayer *pPlayer, CInfCl
 
 void CInfClassGameController::OnHeroFlagCollected(int ClientId)
 {
-	GameServer()->SendBroadcast_Localization(-1, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The Hero found the flag!"), NULL);
+	GameServer()->SendBroadcast_Localization(-1, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The Hero found the flag!"), NULL);
 	GameServer()->CreateSoundGlobal(SOUND_CTF_CAPTURE);
 
 	int Tick = Server()->Tick();
@@ -909,15 +905,15 @@ void CInfClassGameController::SendServerParams(int ClientId) const
 
 void CInfClassGameController::ResetFinalExplosion()
 {
-	m_ExplosionStarted = false;
-	
-	for(int j=0; j<m_MapHeight; j++)
+	m_FinalExplosionState = EFinalExplosionState::NotStarted;
+
+	for(int j = 0; j < m_MapHeight; j++)
 	{
-		for(int i=0; i<m_MapWidth; i++)
+		for(int i = 0; i < m_MapWidth; i++)
 		{
-			if(!(m_GrowingMap[j*m_MapWidth+i] & 4))
+			if(!(m_GrowingMap[j * m_MapWidth + i] & 4))
 			{
-				m_GrowingMap[j*m_MapWidth+i] = 1;
+				m_GrowingMap[j * m_MapWidth + i] = 1;
 			}
 		}
 	}
@@ -1120,109 +1116,116 @@ const char *CInfClassGameController::GetClassName(EPlayerClass PlayerClass)
 
 const char *CInfClassGameController::GetClassPluralName(EPlayerClass PlayerClass)
 {
-	switch (PlayerClass)
+	switch(PlayerClass)
 	{
-		case EPlayerClass::Mercenary:
-			return "mercenaries";
-		case EPlayerClass::Medic:
-			return "medics";
-		case EPlayerClass::Hero:
-			return "heroes";
-		case EPlayerClass::Engineer:
-			return "engineers";
-		case EPlayerClass::Soldier:
-			return "soldiers";
-		case EPlayerClass::Ninja:
-			return "ninjas";
-		case EPlayerClass::Sniper:
-			return "snipers";
-		case EPlayerClass::Scientist:
-			return "scientists";
-		case EPlayerClass::Biologist:
-			return "biologists";
-		case EPlayerClass::Looper:
-			return "loopers";
+	case EPlayerClass::Mercenary:
+		return "mercenaries";
+	case EPlayerClass::Medic:
+		return "medics";
+	case EPlayerClass::Hero:
+		return "heroes";
+	case EPlayerClass::Engineer:
+		return "engineers";
+	case EPlayerClass::Soldier:
+		return "soldiers";
+	case EPlayerClass::Ninja:
+		return "ninjas";
+	case EPlayerClass::Sniper:
+		return "snipers";
+	case EPlayerClass::Scientist:
+		return "scientists";
+	case EPlayerClass::Biologist:
+		return "biologists";
+	case EPlayerClass::Looper:
+		return "loopers";
 
-		case EPlayerClass::Smoker:
-			return "smokers";
-		case EPlayerClass::Boomer:
-			return "boomers";
-		case EPlayerClass::Hunter:
-			return "hunters";
-		case EPlayerClass::Bat:
-			return "bats";
-		case EPlayerClass::Ghost:
-			return "ghosts";
-		case EPlayerClass::Spider:
-			return "spiders";
-		case EPlayerClass::Ghoul:
-			return "ghouls";
-		case EPlayerClass::Slug:
-			return "slugs";
-		case EPlayerClass::Voodoo:
-			return "voodoos";
-		case EPlayerClass::Witch:
-			return "witches";
-		case EPlayerClass::Undead:
-			return "undeads";
+	case EPlayerClass::Smoker:
+		return "smokers";
+	case EPlayerClass::Boomer:
+		return "boomers";
+	case EPlayerClass::Hunter:
+		return "hunters";
+	case EPlayerClass::Bat:
+		return "bats";
+	case EPlayerClass::Ghost:
+		return "ghosts";
+	case EPlayerClass::Spider:
+		return "spiders";
+	case EPlayerClass::Ghoul:
+		return "ghouls";
+	case EPlayerClass::Slug:
+		return "slugs";
+	case EPlayerClass::Voodoo:
+		return "voodoos";
+	case EPlayerClass::Witch:
+		return "witches";
+	case EPlayerClass::Undead:
+		return "undeads";
 
-		default:
-			return "unknown";
+	case EPlayerClass::Invalid:
+	case EPlayerClass::None:
+	case EPlayerClass::Count:
+		break;
 	}
+
+	return "unknown";
 }
 
 const char *CInfClassGameController::GetClassDisplayName(EPlayerClass PlayerClass, const char *pDefaultText)
 {
-	switch (PlayerClass)
+	switch(PlayerClass)
 	{
-		case EPlayerClass::Mercenary:
-			return _("Mercenary");
-		case EPlayerClass::Medic:
-			return _("Medic");
-		case EPlayerClass::Hero:
-			return _("Hero");
-		case EPlayerClass::Engineer:
-			return _("Engineer");
-		case EPlayerClass::Soldier:
-			return _("Soldier");
-		case EPlayerClass::Ninja:
-			return _("Ninja");
-		case EPlayerClass::Sniper:
-			return _("Sniper");
-		case EPlayerClass::Scientist:
-			return _("Scientist");
-		case EPlayerClass::Biologist:
-			return _("Biologist");
-		case EPlayerClass::Looper:
-			return _("Looper");
+	case EPlayerClass::Mercenary:
+		return _("Mercenary");
+	case EPlayerClass::Medic:
+		return _("Medic");
+	case EPlayerClass::Hero:
+		return _("Hero");
+	case EPlayerClass::Engineer:
+		return _("Engineer");
+	case EPlayerClass::Soldier:
+		return _("Soldier");
+	case EPlayerClass::Ninja:
+		return _("Ninja");
+	case EPlayerClass::Sniper:
+		return _("Sniper");
+	case EPlayerClass::Scientist:
+		return _("Scientist");
+	case EPlayerClass::Biologist:
+		return _("Biologist");
+	case EPlayerClass::Looper:
+		return _("Looper");
 
-		case EPlayerClass::Smoker:
-			return _("Smoker");
-		case EPlayerClass::Boomer:
-			return _("Boomer");
-		case EPlayerClass::Hunter:
-			return _("Hunter");
-		case EPlayerClass::Bat:
-			return _("Bat");
-		case EPlayerClass::Ghost:
-			return _("Ghost");
-		case EPlayerClass::Spider:
-			return _("Spider");
-		case EPlayerClass::Ghoul:
-			return _("Ghoul");
-		case EPlayerClass::Slug:
-			return _("Slug");
-		case EPlayerClass::Voodoo:
-			return _("Voodoo");
-		case EPlayerClass::Witch:
-			return _("Witch");
-		case EPlayerClass::Undead:
-			return _("Undead");
+	case EPlayerClass::Smoker:
+		return _("Smoker");
+	case EPlayerClass::Boomer:
+		return _("Boomer");
+	case EPlayerClass::Hunter:
+		return _("Hunter");
+	case EPlayerClass::Bat:
+		return _("Bat");
+	case EPlayerClass::Ghost:
+		return _("Ghost");
+	case EPlayerClass::Spider:
+		return _("Spider");
+	case EPlayerClass::Ghoul:
+		return _("Ghoul");
+	case EPlayerClass::Slug:
+		return _("Slug");
+	case EPlayerClass::Voodoo:
+		return _("Voodoo");
+	case EPlayerClass::Witch:
+		return _("Witch");
+	case EPlayerClass::Undead:
+		return _("Undead");
 
-		case EPlayerClass::None:
-		default:
-			return pDefaultText ? pDefaultText : _("Unknown class");
-		}
+	case EPlayerClass::Invalid:
+	case EPlayerClass::None:
+	case EPlayerClass::Count:
+		break;
+	}
+
+	return pDefaultText ? pDefaultText : "Unknown";
 }
 
 const char *CInfClassGameController::GetClassDisplayNameForKilledBy(EPlayerClass PlayerClass, const char *pDefaultText)
@@ -1231,32 +1234,33 @@ const char *CInfClassGameController::GetClassDisplayNameForKilledBy(EPlayerClass
 	{
 		// Only the infected classes are used for now; do not add others to keep the translations smaller
 	case EPlayerClass::Smoker:
-		return _C("For 'Killed by <>'", "a Smoker");
+		return _C_NOOP("For 'Killed by <>'", "a Smoker");
 	case EPlayerClass::Boomer:
-		return _C("For 'Killed by <>'", "a Boomer");
+		return _C_NOOP("For 'Killed by <>'", "a Boomer");
 	case EPlayerClass::Hunter:
-		return _C("For 'Killed by <>'", "a Hunter");
+		return _C_NOOP("For 'Killed by <>'", "a Hunter");
 	case EPlayerClass::Bat:
-		return _C("For 'Killed by <>'", "a Bat");
+		return _C_NOOP("For 'Killed by <>'", "a Bat");
 	case EPlayerClass::Ghost:
-		return _C("For 'Killed by <>'", "a Ghost");
+		return _C_NOOP("For 'Killed by <>'", "a Ghost");
 	case EPlayerClass::Spider:
-		return _C("For 'Killed by <>'", "a Spider");
+		return _C_NOOP("For 'Killed by <>'", "a Spider");
 	case EPlayerClass::Ghoul:
-		return _C("For 'Killed by <>'", "a Ghoul");
+		return _C_NOOP("For 'Killed by <>'", "a Ghoul");
 	case EPlayerClass::Slug:
-		return _C("For 'Killed by <>'", "a Slug");
+		return _C_NOOP("For 'Killed by <>'", "a Slug");
 	case EPlayerClass::Voodoo:
-		return _C("For 'Killed by <>'", "a Voodoo");
+		return _C_NOOP("For 'Killed by <>'", "a Voodoo");
 	case EPlayerClass::Witch:
-		return _C("For 'Killed by <>'", "a Witch");
+		return _C_NOOP("For 'Killed by <>'", "a Witch");
 	case EPlayerClass::Undead:
-		return _C("For 'Killed by <>'", "an Undead");
+		return _C_NOOP("For 'Killed by <>'", "an Undead");
 
-	case EPlayerClass::None:
 	default:
-		return pDefaultText ? pDefaultText : _C("For 'Killed by <>'", "someone unknown");
+		break;
 	}
+
+	return pDefaultText ? pDefaultText : "Unknown";
 }
 
 const char *CInfClassGameController::GetClanForClass(EPlayerClass PlayerClass, const char *pDefaultText)
@@ -1270,55 +1274,58 @@ const char *CInfClassGameController::GetClanForClass(EPlayerClass PlayerClass, c
 
 const char *CInfClassGameController::GetClassPluralDisplayName(EPlayerClass PlayerClass)
 {
-	switch (PlayerClass)
+	switch(PlayerClass)
 	{
-		case EPlayerClass::Mercenary:
-			return _("Mercenaries");
-		case EPlayerClass::Medic:
-			return _("Medics");
-		case EPlayerClass::Hero:
-			return _("Heroes");
-		case EPlayerClass::Engineer:
-			return _("Engineers");
-		case EPlayerClass::Soldier:
-			return _("Soldiers");
-		case EPlayerClass::Ninja:
-			return _("Ninjas");
-		case EPlayerClass::Sniper:
-			return _("Snipers");
-		case EPlayerClass::Scientist:
-			return _("Scientists");
-		case EPlayerClass::Biologist:
-			return _("Biologists");
-		case EPlayerClass::Looper:
-			return _("Loopers");
+	case EPlayerClass::Mercenary:
+		return _("Mercenaries");
+	case EPlayerClass::Medic:
+		return _("Medics");
+	case EPlayerClass::Hero:
+		return _("Heroes");
+	case EPlayerClass::Engineer:
+		return _("Engineers");
+	case EPlayerClass::Soldier:
+		return _("Soldiers");
+	case EPlayerClass::Ninja:
+		return _("Ninjas");
+	case EPlayerClass::Sniper:
+		return _("Snipers");
+	case EPlayerClass::Scientist:
+		return _("Scientists");
+	case EPlayerClass::Biologist:
+		return _("Biologists");
+	case EPlayerClass::Looper:
+		return _("Loopers");
 
-		case EPlayerClass::Smoker:
-			return _("Smokers");
-		case EPlayerClass::Boomer:
-			return _("Boomers");
-		case EPlayerClass::Hunter:
-			return _("Hunters");
-		case EPlayerClass::Bat:
-			return _("Bats");
-		case EPlayerClass::Ghost:
-			return _("Ghosts");
-		case EPlayerClass::Spider:
-			return _("Spiders");
-		case EPlayerClass::Ghoul:
-			return _("Ghouls");
-		case EPlayerClass::Slug:
-			return _("Slugs");
-		case EPlayerClass::Voodoo:
-			return _("Voodoos");
-		case EPlayerClass::Witch:
-			return _("Witches");
-		case EPlayerClass::Undead:
-			return _("Undeads");
+	case EPlayerClass::Smoker:
+		return _("Smokers");
+	case EPlayerClass::Boomer:
+		return _("Boomers");
+	case EPlayerClass::Hunter:
+		return _("Hunters");
+	case EPlayerClass::Bat:
+		return _("Bats");
+	case EPlayerClass::Ghost:
+		return _("Ghosts");
+	case EPlayerClass::Spider:
+		return _("Spiders");
+	case EPlayerClass::Ghoul:
+		return _("Ghouls");
+	case EPlayerClass::Slug:
+		return _("Slugs");
+	case EPlayerClass::Voodoo:
+		return _("Voodoos");
+	case EPlayerClass::Witch:
+		return _("Witches");
+	case EPlayerClass::Undead:
+		return _("Undeads");
 
-		default:
-			return _("Unknowns");
+	case EPlayerClass::Invalid:
+	case EPlayerClass::None:
+	case EPlayerClass::Count:
+		break;
 	}
+	return _("Unknown");
 }
 
 EPlayerClass CInfClassGameController::MenuClassToPlayerClass(int MenuClass)
@@ -1465,6 +1472,13 @@ void CInfClassGameController::SetPlayerInfected(int ClientId, bool Infected)
 
 void CInfClassGameController::RegisterChatCommands(IConsole *pConsole)
 {
+	Console()->Register("inf_set_weapon_fire_delay", "i[weapon] i[msec]", CFGFLAG_SERVER, ConSetWeaponFireDelay, this,
+		"Set InfClass weapon fire delay");
+	Console()->Register("inf_set_weapon_ammo_regen", "i[weapon] i[msec]", CFGFLAG_SERVER, ConSetWeaponAmmoRegen, this,
+		"Set InfClass weapon ammo regen interval");
+	Console()->Register("inf_set_weapon_max_ammo", "i[weapon] i[ammo]", CFGFLAG_SERVER, ConSetWeaponMaxAmmo, this,
+		"Set InfClass weapon max ammo");
+
 	pConsole->Register("restore_client_name", "i[ClientId]", CFGFLAG_SERVER, ConRestoreClientName, this, "Set the name of a player");
 	pConsole->Register("set_client_name", "i[ClientId] r[name]", CFGFLAG_SERVER, ConSetClientName, this, "Set the name of a player (and also lock it)");
 	pConsole->Register("lock_client_name", "i[ClientId] i[lock]", CFGFLAG_SERVER, ConLockClientName, this, "Set the name of a player");
@@ -1508,6 +1522,68 @@ void CInfClassGameController::RegisterChatCommands(IConsole *pConsole)
 
 	pConsole->Register("witch", "", CFGFLAG_CHAT, ChatWitch, this, "Call Witch");
 	pConsole->Register("santa", "", CFGFLAG_CHAT, ChatWitch, this, "Call the Santa");
+}
+
+void CInfClassGameController::ConSetWeaponFireDelay(IConsole::IResult *pResult, void *pUserData)
+{
+	CInfClassGameController *pSelf = (CInfClassGameController *)pUserData;
+	if(pResult->NumArguments() != 2)
+		return;
+
+	int WeaponId = pResult->GetInteger(0);
+	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
+	{
+		return;
+	}
+	int Interval = pResult->GetInteger(1);
+	if(Interval < 0)
+	{
+		return;
+	}
+
+	pSelf->SetFireDelay(static_cast<EInfclassWeapon>(WeaponId), Interval);
+}
+
+void CInfClassGameController::ConSetWeaponAmmoRegen(IConsole::IResult *pResult, void *pUserData)
+{
+	CInfClassGameController *pSelf = (CInfClassGameController *)pUserData;
+	if(pResult->NumArguments() != 2)
+		return;
+
+	int WeaponId = pResult->GetInteger(0);
+	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
+	{
+		return;
+	}
+	int Interval = pResult->GetInteger(1);
+	if(Interval < 0)
+	{
+		return;
+	}
+
+	pSelf->SetAmmoRegenTime(static_cast<EInfclassWeapon>(WeaponId), Interval);
+
+	return;
+}
+
+void CInfClassGameController::ConSetWeaponMaxAmmo(IConsole::IResult *pResult, void *pUserData)
+{
+	CInfClassGameController *pSelf = (CInfClassGameController *)pUserData;
+	if(pResult->NumArguments() != 2)
+		return;
+
+	int WeaponId = pResult->GetInteger(0);
+	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
+	{
+		return;
+	}
+	int Interval = pResult->GetInteger(1);
+	if(Interval < 0)
+	{
+		return;
+	}
+
+	pSelf->SetMaxAmmo(static_cast<EInfclassWeapon>(WeaponId), Interval);
 }
 
 void CInfClassGameController::ConRestoreClientName(IConsole::IResult *pResult, void *pUserData)
@@ -1755,12 +1831,17 @@ void CInfClassGameController::ConQueueSpecialRound(IConsole::IResult *pResult, v
 {
 	CInfClassGameController *pSelf = (CInfClassGameController *)pUserData;
 	const char *pRoundTypeName = pResult->GetString(0);
+	pSelf->ConQueueRound(pRoundTypeName);
+}
+
+void CInfClassGameController::ConQueueRound(const char *pRoundTypeName)
+{
 	ERoundType Type = fromString<ERoundType>(pRoundTypeName);
 	if(Type == ERoundType::Invalid)
 	{
 		return;
 	}
-	pSelf->QueueRoundType(Type);
+	QueueRoundType(Type);
 }
 
 void CInfClassGameController::ConStartRound(IConsole::IResult *pResult, void *pUserData)
@@ -2350,6 +2431,11 @@ void CInfClassGameController::ChatWitch(IConsole::IResult *pResult)
 	}
 }
 
+CDoor *CInfClassGameController::AddDoor(const vec2 &From, const vec2 &To)
+{
+	return new CDoor(GameServer(), From, To);
+}
+
 IConsole *CInfClassGameController::Console() const
 {
 	return GameServer()->Console();
@@ -2413,9 +2499,9 @@ void CInfClassGameController::SortCharactersByDistance(const ClientsArray &Input
 			continue;
 
 		Distances.Add(DistanceItem(ClientId, Distance));
-
-		std::sort(Distances.begin(), Distances.end());
 	}
+
+	std::sort(Distances.begin(), Distances.end());
 
 	pOutput->Clear();
 	for(const DistanceItem &DistanceItem : Distances)
@@ -2623,6 +2709,10 @@ void CInfClassGameController::StartRound()
 	m_RoundType = NewRoundType;
 	QueueRoundType(ERoundType::Invalid);
 
+	m_WinCheckEnabled.reset();
+	m_RoundMinimumInfected.reset();
+	m_RoundTimeLimitSeconds.reset();
+
 	switch(GetRoundType())
 	{
 	case ERoundType::Normal:
@@ -2693,9 +2783,9 @@ void CInfClassGameController::EndRound()
 
 void CInfClassGameController::EndRound(ROUND_END_REASON Reason)
 {
+	int NumHumans = 0;
+	int NumInfected = 0;
 	{
-		int NumHumans = 0;
-		int NumInfected = 0;
 		GetPlayerCounter(-1, NumHumans, NumInfected);
 
 		const char *pWinnerTeam = Reason == ROUND_END_REASON::FINISHED ? (NumHumans > 0 ? "humans" : "zombies") : "none";
@@ -2710,7 +2800,6 @@ void CInfClassGameController::EndRound(ROUND_END_REASON Reason)
 			NumHumans, Seconds, m_RoundCount + 1, Config()->m_SvRoundsPerMap, pRoundType);
 		Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 	}
-	m_InfectedStarted = false;
 	ResetFinalExplosion();
 	IGameController::EndRound();
 
@@ -2719,6 +2808,15 @@ void CInfClassGameController::EndRound(ROUND_END_REASON Reason)
 		MaybeSendStatistics();
 		Server()->OnRoundIsOver();
 	}
+	else if(Reason == ROUND_END_REASON::CANCELED)
+	{
+		if(!m_InfectedStarted || (NumHumans + NumInfected) < 2)
+		{
+			m_GameOverTick = 0;
+		}
+	}
+
+	m_InfectedStarted = false;
 
 	switch(GetRoundType())
 	{
@@ -2785,6 +2883,9 @@ void CInfClassGameController::GetPlayerCounter(int ClientException, int& NumHuma
 
 int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) const
 {
+	if(m_RoundMinimumInfected.has_value())
+		return m_RoundMinimumInfected.value();
+
 	if(GetRoundType() == ERoundType::Fast)
 	{
 		//  7 | 3 vs 4 | 3.01
@@ -2796,6 +2897,7 @@ int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) con
 		return PlayersNumber * 0.43;
 	}
 
+	int InitialPlayersLimit = Config()->m_InfFirstInfectedLimit;
 	int NumFirstInfected = 0;
 
 	if(PlayersNumber > 20)
@@ -2809,15 +2911,9 @@ int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) con
 	else
 		NumFirstInfected = 0;
 
-	int FirstInfectedLimit = Config()->m_InfFirstInfectedLimit;
-	if(FirstInfectedLimit && NumFirstInfected > FirstInfectedLimit)
+	if(InitialPlayersLimit && NumFirstInfected > InitialPlayersLimit)
 	{
-		NumFirstInfected = FirstInfectedLimit;
-	}
-
-	if(GetRoundType() == ERoundType::Survival)
-	{
-		NumFirstInfected = 0;
+		NumFirstInfected = InitialPlayersLimit;
 	}
 
 	return NumFirstInfected;
@@ -2825,6 +2921,9 @@ int CInfClassGameController::GetMinimumInfectedForPlayers(int PlayersNumber) con
 
 int CInfClassGameController::GetMinimumInfected() const
 {
+	if(m_RoundMinimumInfected.has_value())
+		return m_RoundMinimumInfected.value();
+
 	int NumPlayers = 0;
 	for(int i = 0; i < MAX_CLIENTS; ++i)
 	{
@@ -2837,6 +2936,16 @@ int CInfClassGameController::GetMinimumInfected() const
 	}
 
 	return GetMinimumInfectedForPlayers(NumPlayers);
+}
+
+void CInfClassGameController::SetRoundMinimumInfected(int Number)
+{
+	m_RoundMinimumInfected = Number;
+}
+
+void CInfClassGameController::ResetRoundMinimumInfected()
+{
+	m_RoundMinimumInfected.reset();
 }
 
 int CInfClassGameController::InfectedBonusArmor() const
@@ -2963,6 +3072,10 @@ void CInfClassGameController::OnKillOrInfection(int Victim, const DeathContext &
 		icArray<const char *, 20> PossibleMessages;
 		switch(Context.DamageType)
 		{
+		case EDamageType::MERCENARY_BOMB:
+			PossibleMessages.Add(("{str:PlayerName} got to know their bomb too closely."));
+			PossibleMessages.Add(("{str:PlayerName} rode the blast wave for the last time."));
+			break;
 		case EDamageType::BOOMER_EXPLOSION:
 			PossibleMessages.Add(("{str:PlayerName} was exploded by {str:Killer}."));
 			PossibleMessages.Add(("{str:PlayerName} was eliminated by {str:Killer}."));
@@ -2995,6 +3108,7 @@ void CInfClassGameController::OnKillOrInfection(int Victim, const DeathContext &
 				{
 					PossibleMessages.Clear();
 					PossibleMessages.Add(("{str:PlayerName} did a stretching exercise."));
+					PossibleMessages.Add(("{str:PlayerName} was torn apart."));
 				}
 				break;
 			}
@@ -3029,14 +3143,15 @@ void CInfClassGameController::OnKillOrInfection(int Victim, const DeathContext &
 		else if(pVictimCharacter->GetLastNoAmmoSoundTick() + Server()->TickSpeed() * 0.6 < Tick)
 		{
 			PossibleMessages.Add("{str:PlayerName} had no ammo to kill them all.");
+			PossibleMessages.Add("{str:PlayerName} forgot to reload timely.");
 		}
 
 		const char *apPlayerKilledByMessages[] = {
-			_("{str:PlayerName} was destroyed by {str:Killer}."),
-			_("{str:PlayerName} was slain by {str:Killer}."),
-			_("{str:PlayerName} was decapitated by {str:Killer}."),
-			_("{str:PlayerName} was chopped up by {str:Killer}."),
-			_("{str:PlayerName} was removed from this world by {str:Killer}."),
+			"{str:PlayerName} was destroyed by {str:Killer}.",
+			"{str:PlayerName} was slain by {str:Killer}.",
+			"{str:PlayerName} was decapitated by {str:Killer}.",
+			"{str:PlayerName} was chopped up by {str:Killer}.",
+			"{str:PlayerName} was removed from this world by {str:Killer}.",
 		};
 
 		if(PossibleMessages.IsEmpty())
@@ -3066,6 +3181,11 @@ void CInfClassGameController::OnKillOrInfection(int Victim, const DeathContext &
 		m_LastUsedKillMessage = pMessage;
 
 		const char *pKillerText = GetClassDisplayNameForKilledBy(KillerClass);
+		dbg_assert(pKillerText, "Killer class has no display name");
+		if(!pKillerText)
+		{
+			return;
+		}
 		GameServer()->SendChatTarget_Localization(-1, CHATCATEGORY_PLAYER,
 			pMessage,
 			"PlayerName", GameServer()->Server()->ClientName(Victim),
@@ -3083,10 +3203,11 @@ void CInfClassGameController::OnKillOrInfection(int Victim, const DeathContext &
 		if(BadTiles.Contains(Context.DamageType))
 		{
 			PossibleMessages.Add(("{str:PlayerName} made a wrong step."));
+			PossibleMessages.Add(("{str:PlayerName} went where they shouldn't."));
 		}
 
 		const char *apPlayerDeathMessages[] = {
-			_("{str:PlayerName} didn't survive in this round."),
+			"{str:PlayerName} didn't survive in this round.",
 		};
 
 		if(PossibleMessages.IsEmpty())
@@ -3312,18 +3433,24 @@ void CInfClassGameController::Tick()
 		}
 
 		DoWincheck();
+		if(m_FinalExplosionState == EFinalExplosionState::Started)
+		{
+			ProgressFinalExplosion();
+		}
 	}
 	else
 	{
 		m_RoundStartTick = Server()->Tick();
 	}
 
-	UpdateNinjaTargets();
-	HandleLastHookers();
-
 	if(GameWorld()->m_Paused)
 	{
 		m_HeroGiftTick++;
+	}
+	else
+	{
+		UpdateNinjaTargets();
+		HandleLastHookers();
 	}
 
 	if(m_SuggestMoreRounds && !GameServer()->HasActiveVote())
@@ -3578,7 +3705,7 @@ void CInfClassGameController::BroadcastInfectionComing(int InfectionTick)
 		return;
 
 	int Seconds = (InfectionTick - Server()->Tick()) / Server()->TickSpeed() + 1;
-	int Priority = Seconds <= 3 ? BROADCAST_PRIORITY_GAMEANNOUNCE : BROADCAST_PRIORITY_LOWEST;
+	EBroadcastPriority Priority = Seconds <= 3 ? EBroadcastPriority::GAMEANNOUNCE : EBroadcastPriority::LOWEST;
 	GameServer()->SendBroadcast_Localization(-1,
 		Priority,
 		BROADCAST_DURATION_REALTIME,
@@ -3587,12 +3714,13 @@ void CInfClassGameController::BroadcastInfectionComing(int InfectionTick)
 		nullptr);
 }
 
-void CInfClassGameController::MaybeDropPickup(const CInfClassCharacter *pVictim)
+void CInfClassGameController::MaybeDropPickup(CInfClassCharacter *pVictim)
 {
 	const int DropMaxLevel = pVictim->GetDropLevel();
 	if(DropMaxLevel <= 0)
 		return;
 
+	pVictim->SetDropLevel(0);
 	const vec2 Pos = pVictim->GetPos();
 	const int ZoneIndex = GetDamageZoneValueAt(Pos);
 
@@ -3663,7 +3791,7 @@ bool CInfClassGameController::IsInfectionStarted() const
 	if(Config()->m_InfTrainingMode)
 		return false;
 
-	return (m_RoundStartTick + Server()->TickSpeed() * GetInfectionDelay() <= Server()->Tick());
+	return GetInfectionStartTick() <= Server()->Tick();
 }
 
 bool CInfClassGameController::MapRotationEnabled() const
@@ -3686,7 +3814,7 @@ void CInfClassGameController::OnTeamChangeRequested(int ClientId, int Team)
 			pPlayer->m_TeamChangeTick = Server()->Tick();
 		}
 		else
-			GameServer()->SendBroadcast(ClientId, "Teams must be balanced, please join other team", BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
+			GameServer()->SendBroadcast(ClientId, "Teams must be balanced, please join other team", EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
 	}
 }
 
@@ -3697,7 +3825,7 @@ bool CInfClassGameController::CanJoinTeam(int Team, int ClientId)
 		if(GetRoundType() == ERoundType::Survival && IsInfectionStarted())
 		{
 			GameServer()->SendBroadcast_Localization(ClientId,
-				BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
+				EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
 				_("You have to wait until the survival is over"));
 			return false;
 		}
@@ -3740,6 +3868,14 @@ bool CInfClassGameController::AreTurretsEnabled() const
 		return true;
 
 	return Server()->GetActivePlayerCount() >= static_cast<uint32_t>(Config()->m_InfMinPlayersForTurrets);
+}
+
+int CInfClassGameController::InfTurretDuration() const
+{
+	if(GetRoundType() == ERoundType::Survival)
+		return 20;
+
+	return Config()->m_InfTurretDuration;
 }
 
 bool CInfClassGameController::MercBombsEnabled() const
@@ -3825,6 +3961,9 @@ float CInfClassGameController::GetTimeLimitMinutes() const
 	if(Config()->m_InfTrainingMode)
 		return 0;
 
+	if(m_RoundTimeLimitSeconds.has_value())
+		return m_RoundTimeLimitSeconds.value() / 60.0;
+
 	float BaseTimeLimit = Config()->m_SvTimelimitInSeconds ? Config()->m_SvTimelimitInSeconds / 60.0 : Config()->m_SvTimelimit;
 
 	switch(GetRoundType())
@@ -3838,9 +3977,24 @@ float CInfClassGameController::GetTimeLimitMinutes() const
 	}
 }
 
-float CInfClassGameController::GetInfectionDelay() const
+int CInfClassGameController::GetTimeLimitSeconds() const
 {
-	return Config()->m_InfInitialInfectionDelay;
+	return GetTimeLimitMinutes() * 60;
+}
+
+void CInfClassGameController::SetTimeLimitSeconds(float Seconds)
+{
+	m_RoundTimeLimitSeconds = Seconds;
+}
+
+int CInfClassGameController::GetInfectionDelay() const
+{
+	return m_RoundInfectionDelaySeconds.value_or(Config()->m_InfInitialInfectionDelay);
+}
+
+void CInfClassGameController::SetInfectionDelay(int Seconds)
+{
+	m_RoundInfectionDelaySeconds = Seconds;
 }
 
 bool CInfClassGameController::HeroGiftAvailable() const
@@ -3977,6 +4131,9 @@ void CInfClassGameController::StartSurvivalRound()
 		}
 	}
 	GameServer()->SendChat(-1, CGameContext::CHAT_ALL, aBuf);
+
+	SetRoundMinimumPlayers(1);
+	SetRoundMinimumInfected(0);
 }
 
 void CInfClassGameController::EndSurvivalRound()
@@ -4049,6 +4206,105 @@ void CInfClassGameController::EndSurvivalRound()
 	QueueRoundType(ERoundType::Survival);
 }
 
+void CInfClassGameController::EnsureFinalExplosionIsStarted()
+{
+	if(m_FinalExplosionState == EFinalExplosionState::NotStarted)
+	{
+		StartFinalExplosion();
+	}
+}
+
+void CInfClassGameController::StartFinalExplosion()
+{
+	dbg_assert(m_FinalExplosionState == EFinalExplosionState::NotStarted, "Invalid final explosion start");
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
+	{
+		if(p->IsInfected())
+		{
+			GameServer()->SendEmoticon(p->GetCid(), EMOTICON_GHOST);
+		}
+		else
+		{
+			GameServer()->SendEmoticon(p->GetCid(), EMOTICON_EYES);
+		}
+	}
+
+	m_FinalExplosionState = EFinalExplosionState::Started;
+}
+
+void CInfClassGameController::ProgressFinalExplosion()
+{
+	if (m_FinalExplosionState != EFinalExplosionState::Started)
+	{
+		return;
+	}
+
+	bool NewExplosion = false;
+
+	for(int j = 0; j < m_MapHeight; j++)
+	{
+		for(int i = 0; i < m_MapWidth; i++)
+		{
+			if((m_GrowingMap[j * m_MapWidth + i] & 1) && ((i > 0 && m_GrowingMap[j * m_MapWidth + i - 1] & 2) ||
+															 (i < m_MapWidth - 1 && m_GrowingMap[j * m_MapWidth + i + 1] & 2) ||
+															 (j > 0 && m_GrowingMap[(j - 1) * m_MapWidth + i] & 2) ||
+															 (j < m_MapHeight - 1 && m_GrowingMap[(j + 1) * m_MapWidth + i] & 2)))
+			{
+				NewExplosion = true;
+				m_GrowingMap[j * m_MapWidth + i] |= 8;
+				m_GrowingMap[j * m_MapWidth + i] &= ~1;
+				if(random_prob(0.1f))
+				{
+					vec2 TilePos = vec2(16.0f, 16.0f) + vec2(i * 32.0f, j * 32.0f);
+					static const int Damage = 0;
+					CreateExplosion(TilePos, -1, EDamageType::NO_DAMAGE, Damage);
+					GameServer()->CreateSound(TilePos, SOUND_GRENADE_EXPLODE);
+				}
+			}
+		}
+	}
+
+	for(int j = 0; j < m_MapHeight; j++)
+	{
+		for(int i = 0; i < m_MapWidth; i++)
+		{
+			if(m_GrowingMap[j * m_MapWidth + i] & 8)
+			{
+				m_GrowingMap[j * m_MapWidth + i] &= ~8;
+				m_GrowingMap[j * m_MapWidth + i] |= 2;
+			}
+		}
+	}
+
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
+	{
+		if(p->IsHuman())
+			continue;
+
+		int tileX = static_cast<int>(round(p->m_Pos.x)) / 32;
+		int tileY = static_cast<int>(round(p->m_Pos.y)) / 32;
+
+		if(tileX < 0)
+			tileX = 0;
+		if(tileX >= m_MapWidth)
+			tileX = m_MapWidth - 1;
+		if(tileY < 0)
+			tileY = 0;
+		if(tileY >= m_MapHeight)
+			tileY = m_MapHeight - 1;
+
+		if(m_GrowingMap[tileY * m_MapWidth + tileX] & 2 && p->GetPlayer())
+		{
+			p->Die(p->GetCid(), EDamageType::GAME_FINAL_EXPLOSION);
+		}
+	}
+
+	if(!NewExplosion)
+	{
+		m_FinalExplosionState = EFinalExplosionState::Finished;
+	}
+}
+
 void CInfClassGameController::Snap(int SnappingClient)
 {
 	CNetObj_GameInfo *pGameInfoObj = Server()->SnapNewItem<CNetObj_GameInfo>(0);
@@ -4085,7 +4341,7 @@ void CInfClassGameController::Snap(int SnappingClient)
 	CNetObj_InfClassGameInfo *pInfclassGameInfoObj = Server()->SnapNewItem<CNetObj_InfClassGameInfo>(0);
 	pInfclassGameInfoObj->m_Version = 2;
 	pInfclassGameInfoObj->m_Flags = 0;
-	pInfclassGameInfoObj->m_TimeLimitInSeconds = GetTimeLimitMinutes() * 60;
+	pInfclassGameInfoObj->m_TimeLimitInSeconds = GetTimeLimitSeconds();
 	pInfclassGameInfoObj->m_HeroGiftTick = m_HeroGiftTick;
 
 	int InfClassVersion = Server()->GetClientInfclassVersion(SnappingClient);
@@ -4122,12 +4378,12 @@ CPlayer *CInfClassGameController::CreatePlayer(int ClientId, bool IsSpectator, v
 	CInfClassPlayer *pPlayer = nullptr;
 	if(IsSpectator)
 	{
-		pPlayer = new(ClientId) CInfClassPlayer(this, ClientId, TEAM_SPECTATORS);
+		pPlayer = new(ClientId) CInfClassPlayer(this, GetNextClientUniqueId(), ClientId, TEAM_SPECTATORS);
 	}
 	else
 	{
 		const int StartTeam = Config()->m_SvTournamentMode ? TEAM_SPECTATORS : GetAutoTeam(ClientId);
-		pPlayer = new(ClientId) CInfClassPlayer(this, ClientId, StartTeam);
+		pPlayer = new(ClientId) CInfClassPlayer(this, GetNextClientUniqueId(), ClientId, StartTeam);
 	}
 
 	if(pData)
@@ -4433,12 +4689,12 @@ void CInfClassGameController::OnCharacterDeath(CInfClassCharacter *pVictim, cons
 		switch(VictimClass)
 		{
 			case EPlayerClass::Witch:
-				GameServer()->SendBroadcast_Localization(-1, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The witch is dead"), NULL);
+				GameServer()->SendBroadcast_Localization(-1, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The witch is dead"), NULL);
 				GameServer()->CreateSoundGlobal(SOUND_CTF_RETURN);
 				InfectionType = INFECTION_TYPE::RESTORE_INF_CLASS;
 				break;
 			case EPlayerClass::Undead:
-				GameServer()->SendBroadcast_Localization(-1, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The undead is finally dead"), NULL);
+				GameServer()->SendBroadcast_Localization(-1, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("The undead is finally dead"), NULL);
 				GameServer()->CreateSoundGlobal(SOUND_CTF_RETURN);
 				InfectionType = INFECTION_TYPE::RESTORE_INF_CLASS;
 				break;
@@ -4534,10 +4790,7 @@ void CInfClassGameController::OnCharacterSpawned(CInfClassCharacter *pCharacter,
 
 	if((GetRoundType() == ERoundType::Fun) && !IsInfectionStarted() && pCharacter->GetPlayerClass() == EPlayerClass::None)
 	{
-		if(pPlayer)
-		{
-			pPlayer->SetClass(ChooseHumanClass(pPlayer));
-		}
+		pPlayer->SetClass(ChooseHumanClass(pPlayer));
 	}
 }
 
@@ -4578,6 +4831,9 @@ void CInfClassGameController::OnClassChooserRequested(CInfClassCharacter *pChara
 void CInfClassGameController::CheckRoundFailed()
 {
 	if(m_Warmup)
+		return;
+
+	if(!IsWinCheckEnabled())
 		return;
 
 	if(IsGameOver())
@@ -4640,130 +4896,59 @@ void CInfClassGameController::CheckRoundFailed()
 
 void CInfClassGameController::DoWincheck()
 {
+	if(!IsWinCheckEnabled())
+		return;
+
 	if(Config()->m_InfTrainingMode)
 		return;
-
-	int NumHumans = 0;
-	int NumInfected = 0;
-	GetPlayerCounter(-1, NumHumans, NumInfected);
-
-	// One infected can win in some rounds; we have a check if this is a valid situation in CheckRoundFailed()
-	if(m_InfectedStarted && NumHumans == 0 && NumInfected >= 1)
-	{
-		AnnounceTheWinner(NumHumans);
-		return;
-	}
 
 	if(!m_InfectedStarted)
 	{
 		return;
 	}
 
-	bool HumanVictoryConditionsMet = false;
-	bool TimeIsOver = false;
+	int NumHumans = 0;
+	int NumInfected = 0;
+	GetPlayerCounter(-1, NumHumans, NumInfected);
+
+	bool VictoryConditionsMet = false;
+	bool NeedFinalExplosion = false;
+	bool TimeIsOut = false;
 	const int Seconds = (Server()->Tick() - m_RoundStartTick) / ((float)Server()->TickSpeed());
-	if(GetTimeLimitMinutes() > 0 && Seconds >= GetTimeLimitMinutes() * 60)
+	if(GetTimeLimitMinutes() > 0 && Seconds >= GetTimeLimitSeconds())
 	{
-		TimeIsOver = true;
+		TimeIsOut = true;
 	}
 
-	if(TimeIsOver)
+	switch(GetRoundType())
 	{
-		HumanVictoryConditionsMet = true;
+	default:
+		// One infected can win in some rounds; we have a check if this is a valid situation in CheckRoundFailed()
+		if(NumHumans == 0 && NumInfected >= 1)
+		{
+			VictoryConditionsMet = true;
+		}
+		else if(TimeIsOut)
+		{
+			VictoryConditionsMet = true;
+			NeedFinalExplosion = true;
+		}
+		break;
 	}
 
-	if(!HumanVictoryConditionsMet)
+	if(!VictoryConditionsMet)
 	{
 		return;
 	}
 
-	bool NeedFinalExplosion = true;
-
-	//Start the final explosion if the time is over
-	if(NeedFinalExplosion && !m_ExplosionStarted)
+	// Start the final explosion if the time is over
+	if(NeedFinalExplosion)
 	{
-		for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
-		{
-			if(p->IsInfected())
-			{
-				GameServer()->SendEmoticon(p->GetCid(), EMOTICON_GHOST);
-			}
-			else
-			{
-				GameServer()->SendEmoticon(p->GetCid(), EMOTICON_EYES);
-			}
-		}
-		m_ExplosionStarted = true;
-	}
-
-	//Do the final explosion
-	if(m_ExplosionStarted)
-	{
-		bool NewExplosion = false;
-
-		for(int j=0; j<m_MapHeight; j++)
-		{
-			for(int i=0; i<m_MapWidth; i++)
-			{
-				if((m_GrowingMap[j*m_MapWidth+i] & 1) && (
-					(i > 0 && m_GrowingMap[j*m_MapWidth+i-1] & 2) ||
-					(i < m_MapWidth-1 && m_GrowingMap[j*m_MapWidth+i+1] & 2) ||
-					(j > 0 && m_GrowingMap[(j-1)*m_MapWidth+i] & 2) ||
-					(j < m_MapHeight-1 && m_GrowingMap[(j+1)*m_MapWidth+i] & 2)
-				))
-				{
-					NewExplosion = true;
-					m_GrowingMap[j*m_MapWidth+i] |= 8;
-					m_GrowingMap[j*m_MapWidth+i] &= ~1;
-					if(random_prob(0.1f))
-					{
-						vec2 TilePos = vec2(16.0f, 16.0f) + vec2(i*32.0f, j*32.0f);
-						static const int Damage = 0;
-						CreateExplosion(TilePos, -1, EDamageType::NO_DAMAGE, Damage);
-						GameServer()->CreateSound(TilePos, SOUND_GRENADE_EXPLODE);
-					}
-				}
-			}
-		}
-
-		for(int j=0; j<m_MapHeight; j++)
-		{
-			for(int i=0; i<m_MapWidth; i++)
-			{
-				if(m_GrowingMap[j*m_MapWidth+i] & 8)
-				{
-					m_GrowingMap[j*m_MapWidth+i] &= ~8;
-					m_GrowingMap[j*m_MapWidth+i] |= 2;
-				}
-			}
-		}
-
-		for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
-		{
-			if(p->IsHuman())
-				continue;
-
-			int tileX = static_cast<int>(round(p->m_Pos.x))/32;
-			int tileY = static_cast<int>(round(p->m_Pos.y))/32;
-
-			if(tileX < 0) tileX = 0;
-			if(tileX >= m_MapWidth) tileX = m_MapWidth-1;
-			if(tileY < 0) tileY = 0;
-			if(tileY >= m_MapHeight) tileY = m_MapHeight-1;
-
-			if(m_GrowingMap[tileY*m_MapWidth+tileX] & 2 && p->GetPlayer())
-			{
-				p->Die(p->GetCid(), EDamageType::GAME_FINAL_EXPLOSION);
-			}
-		}
-		if(!NewExplosion)
-		{
-			NeedFinalExplosion = false;
-		}
+		EnsureFinalExplosionIsStarted();
 	}
 
 	//If no more explosions, game over, decide who win
-	if(!NeedFinalExplosion)
+	if(!NeedFinalExplosion || (m_FinalExplosionState == EFinalExplosionState::Finished))
 	{
 		AnnounceTheWinner(NumHumans);
 	}
@@ -4821,7 +5006,7 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 	if(Infect)
 		pPlayer->StartInfection();
 
-	if(pPlayer->IsInfected() && m_ExplosionStarted)
+	if(pPlayer->IsInfected() && (m_FinalExplosionState != EFinalExplosionState::NotStarted))
 		return false;
 
 	if(GetRoundType() == ERoundType::Survival && pPlayer->IsInfected())
@@ -4834,7 +5019,7 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 		if(!pPlayer->IsBot())
 		{
 			GameServer()->SendBroadcast(pPlayer->GetCid(), "You are dead and have to wait for others",
-				BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_REALTIME);
+				EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_REALTIME);
 			return false;
 		}
 	}
@@ -4850,10 +5035,10 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 				continue;
 
 			CInfClassCharacter *pCharacter = Iter.Player()->GetCharacter();
-			if(!pCharacter)
+			if(!pCharacter || !pCharacter->IsAlive())
 				continue;
 
-			if(pCharacter->IsFrozen())
+			if(pCharacter->IsFrozen() || pCharacter->IsSleeping())
 				continue;
 
 			CInfClassInfected *pInfected = CInfClassInfected::GetInstance(pCharacter);
@@ -4875,18 +5060,21 @@ bool CInfClassGameController::TryRespawn(CInfClassPlayer *pPlayer, SpawnContext 
 	}
 
 	// get spawn point
-	int RandomShift = random_int(0, m_SpawnPoints[Type].size()-1);
-	for(int i = 0; i < m_SpawnPoints[Type].size(); i++)
+	const array<vec2> &aSpawnPoints = m_SpawnPoints[Type];
+	const int Count = aSpawnPoints.size();
+	const int RandomShift = random_int(0, Count - 1);
+	for(int i = 0; i < Count; i++)
 	{
-		int I = (i + RandomShift)%m_SpawnPoints[Type].size();
-		if(IsSpawnable(m_SpawnPoints[Type][I], EZoneTele::Null))
-		{
-			pContext->SpawnPos = m_SpawnPoints[Type][I];
-			pContext->SpawnType = SpawnContext::MapSpawn;
-			return true;
-		}
+		int PosIndex = (i + RandomShift) % Count;
+		const vec2 &Pos = aSpawnPoints[PosIndex];
+		if(!IsSpawnable(Pos, EZoneTele::Null))
+			continue;
+
+		pContext->SpawnPos = Pos;
+		pContext->SpawnType = SpawnContext::MapSpawn;
+		return true;
 	}
-	
+
 	return false;
 }
 
@@ -5026,6 +5214,127 @@ EPlayerClass CInfClassGameController::ChooseInfectedClass(const CInfClassPlayer 
 	Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 
 	return Class;
+}
+
+int CInfClassGameController::GetFireDelay(EInfclassWeapon WID) const
+{
+	return m_InfFireDelay[static_cast<int>(WID)];
+}
+
+void CInfClassGameController::SetFireDelay(EInfclassWeapon WID, int Time)
+{
+	m_InfFireDelay[static_cast<int>(WID)] = Time;
+}
+
+int CInfClassGameController::GetAmmoRegenTime(EInfclassWeapon WID) const
+{
+	return m_InfAmmoRegenTime[static_cast<int>(WID)];
+}
+
+void CInfClassGameController::SetAmmoRegenTime(EInfclassWeapon WID, int Time)
+{
+	m_InfAmmoRegenTime[static_cast<int>(WID)] = Time;
+}
+
+int CInfClassGameController::GetMaxAmmo(EInfclassWeapon WID) const
+{
+	return m_InfMaxAmmo[static_cast<int>(WID)];
+}
+
+void CInfClassGameController::SetMaxAmmo(EInfclassWeapon WID, int n)
+{
+	m_InfMaxAmmo[static_cast<int>(WID)] = n;
+}
+
+void CInfClassGameController::InitWeapons()
+{
+	SetFireDelay(EInfclassWeapon::NONE, 0);
+	SetFireDelay(EInfclassWeapon::HAMMER, 125);
+	SetFireDelay(EInfclassWeapon::GUN, 125);
+	SetFireDelay(EInfclassWeapon::SHOTGUN, 500);
+	SetFireDelay(EInfclassWeapon::GRENADE, 500);
+	SetFireDelay(EInfclassWeapon::LASER, 800);
+	SetFireDelay(EInfclassWeapon::NINJA, 800);
+	SetFireDelay(EInfclassWeapon::ENGINEER_LASER, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::SOLDIER_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::EXPLOSIVE_LASER, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::TELEPORT_GUN, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::HEALING_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::MEDIC_LASER, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::MEDIC_SHOTGUN, 250);
+	SetFireDelay(EInfclassWeapon::HERO_SHOTGUN, 250);
+	SetFireDelay(EInfclassWeapon::RICOCHET_SHOTGUN, 250);
+	SetFireDelay(EInfclassWeapon::BIOLOGIST_MINE_LASER, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::LOOPER_LASER, 250);
+	SetFireDelay(EInfclassWeapon::LOOPER_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::HERO_LASER, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::HERO_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::SNIPER_RIFLE, GetFireDelay(EInfclassWeapon::LASER));
+	SetFireDelay(EInfclassWeapon::NINJA_KATANA, GetFireDelay(EInfclassWeapon::NINJA));
+	SetFireDelay(EInfclassWeapon::NINJA_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::POISON_GRENADE, GetFireDelay(EInfclassWeapon::GRENADE));
+	SetFireDelay(EInfclassWeapon::MERCENARY_GUN, 50);
+	SetFireDelay(EInfclassWeapon::MERCENARY_UPGRADE_LASER, 200);
+	SetFireDelay(EInfclassWeapon::BLINDING_LASER, GetFireDelay(EInfclassWeapon::LASER));
+
+	SetAmmoRegenTime(EInfclassWeapon::NONE, 0);
+	SetAmmoRegenTime(EInfclassWeapon::HAMMER, 0);
+	SetAmmoRegenTime(EInfclassWeapon::GUN, 500);
+	SetAmmoRegenTime(EInfclassWeapon::SHOTGUN, 0);
+	SetAmmoRegenTime(EInfclassWeapon::GRENADE, 0);
+	SetAmmoRegenTime(EInfclassWeapon::LASER, 0);
+	SetAmmoRegenTime(EInfclassWeapon::NINJA, 0);
+
+	SetAmmoRegenTime(EInfclassWeapon::ENGINEER_LASER, 6000);
+	SetAmmoRegenTime(EInfclassWeapon::SOLDIER_GRENADE, 7000);
+	SetAmmoRegenTime(EInfclassWeapon::EXPLOSIVE_LASER, 6000);
+	SetAmmoRegenTime(EInfclassWeapon::TELEPORT_GUN, 10000);
+	SetAmmoRegenTime(EInfclassWeapon::HEALING_GRENADE, 0);
+	SetAmmoRegenTime(EInfclassWeapon::MEDIC_LASER, 6000);
+	SetAmmoRegenTime(EInfclassWeapon::MEDIC_SHOTGUN, 750);
+	SetAmmoRegenTime(EInfclassWeapon::HERO_SHOTGUN, 750);
+	SetAmmoRegenTime(EInfclassWeapon::HERO_LASER, 3000);
+	SetAmmoRegenTime(EInfclassWeapon::HERO_GRENADE, 3000);
+	SetAmmoRegenTime(EInfclassWeapon::SNIPER_RIFLE, 2000);
+	SetAmmoRegenTime(EInfclassWeapon::POISON_GRENADE, 5000);
+	SetAmmoRegenTime(EInfclassWeapon::MERCENARY_GUN, 125);
+	SetAmmoRegenTime(EInfclassWeapon::MERCENARY_UPGRADE_LASER, 4000);
+	SetAmmoRegenTime(EInfclassWeapon::NINJA_KATANA, 0);
+	SetAmmoRegenTime(EInfclassWeapon::NINJA_GRENADE, 15000);
+	SetAmmoRegenTime(EInfclassWeapon::BIOLOGIST_MINE_LASER, 175);
+	SetAmmoRegenTime(EInfclassWeapon::RICOCHET_SHOTGUN, 675);
+	SetAmmoRegenTime(EInfclassWeapon::LOOPER_LASER, 500);
+	SetAmmoRegenTime(EInfclassWeapon::LOOPER_GRENADE, 5000);
+	SetAmmoRegenTime(EInfclassWeapon::BLINDING_LASER, 10000);
+
+	SetMaxAmmo(EInfclassWeapon::NONE, -1);
+	SetMaxAmmo(EInfclassWeapon::HAMMER, -1);
+	SetMaxAmmo(EInfclassWeapon::GUN, 10);
+	SetMaxAmmo(EInfclassWeapon::SHOTGUN, 10);
+	SetMaxAmmo(EInfclassWeapon::GRENADE, 10);
+	SetMaxAmmo(EInfclassWeapon::LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::NINJA, 10);
+	SetMaxAmmo(EInfclassWeapon::ENGINEER_LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::EXPLOSIVE_LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::TELEPORT_GUN, 3);
+	SetMaxAmmo(EInfclassWeapon::SOLDIER_GRENADE, 10);
+	SetMaxAmmo(EInfclassWeapon::HEALING_GRENADE, 10);
+	SetMaxAmmo(EInfclassWeapon::MEDIC_LASER, 1);
+	SetMaxAmmo(EInfclassWeapon::MEDIC_SHOTGUN, 10);
+	SetMaxAmmo(EInfclassWeapon::HERO_SHOTGUN, 10);
+	SetMaxAmmo(EInfclassWeapon::HERO_LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::HERO_GRENADE, 10);
+	SetMaxAmmo(EInfclassWeapon::SNIPER_RIFLE, 10);
+	SetMaxAmmo(EInfclassWeapon::NINJA_KATANA, -1);
+	SetMaxAmmo(EInfclassWeapon::NINJA_GRENADE, 5);
+	SetMaxAmmo(EInfclassWeapon::POISON_GRENADE, 8);
+	SetMaxAmmo(EInfclassWeapon::MERCENARY_GUN, 40);
+	SetMaxAmmo(EInfclassWeapon::MERCENARY_UPGRADE_LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::BIOLOGIST_MINE_LASER, 10);
+	SetMaxAmmo(EInfclassWeapon::RICOCHET_SHOTGUN, 10);
+	SetMaxAmmo(EInfclassWeapon::LOOPER_LASER, 20);
+	SetMaxAmmo(EInfclassWeapon::LOOPER_GRENADE, 10);
+	SetMaxAmmo(EInfclassWeapon::BLINDING_LASER, 10);
 }
 
 bool CInfClassGameController::GetPlayerClassEnabled(EPlayerClass PlayerClass) const
@@ -5253,10 +5562,22 @@ int CInfClassGameController::GetInfectedCount(EPlayerClass InfectedPlayerClass) 
 
 int CInfClassGameController::GetMinPlayers() const
 {
-	if(GetRoundType() == ERoundType::Survival)
-		return 1;
+	return m_RoundMinimumPlayers.value_or(Config()->m_InfMinPlayers);
+}
 
-	return Config()->m_InfMinPlayers;
+void CInfClassGameController::SetRoundMinimumPlayers(int Number)
+{
+	m_RoundMinimumPlayers = Number;
+}
+
+bool CInfClassGameController::IsWinCheckEnabled() const
+{
+	return m_WinCheckEnabled.value_or(true);
+}
+
+void CInfClassGameController::SetWinCheckEnabled(bool Enabled)
+{
+	m_WinCheckEnabled = Enabled;
 }
 
 ERoundType CInfClassGameController::GetDefaultRoundType() const

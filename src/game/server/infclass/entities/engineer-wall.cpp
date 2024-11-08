@@ -24,8 +24,9 @@ CEngineerWall::CEngineerWall(CGameContext *pGameContext, vec2 Pos1, int Owner)
 	: CPlacedObject(pGameContext, EntityId, Pos1, Owner)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_LASER_WALL;
+	m_MaxLength = g_BarrierMaxLength;
+
 	m_EndPointId = Server()->SnapNewId();
-	m_Pos2 = Pos1;
 
 	GameWorld()->InsertEntity(this);
 }
@@ -35,24 +36,10 @@ CEngineerWall::~CEngineerWall()
 	Server()->SnapFreeId(m_EndPointId);
 }
 
-void CEngineerWall::SetEndPosition(vec2 EndPosition)
-{
-	if(distance(m_Pos, EndPosition) > g_BarrierMaxLength)
-	{
-		m_Pos2 = m_Pos + normalize(EndPosition - m_Pos) * g_BarrierMaxLength;
-	}
-	else
-	{
-		m_Pos2 = EndPosition;
-	}
-
-	m_InfClassObjectFlags = INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION;
-
-	m_EndTick = Server()->Tick() + Server()->TickSpeed() * Config()->m_InfBarrierLifeSpan;
-}
-
 void CEngineerWall::Tick()
 {
+	CPlacedObject::Tick();
+
 	if(IsMarkedForDestroy())
 		return;
 
@@ -62,30 +49,23 @@ void CEngineerWall::Tick()
 		return;
 	}
 
-	if (m_WallFlashTicks > 0) 
+	if(m_WallFlashTicks > 0)
 		m_WallFlashTicks--;
 
-	if(Server()->Tick() >= m_EndTick)
+	// Find other players
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
 	{
-		GameWorld()->DestroyEntity(this);
-	}
-	else
-	{
-		// Find other players
-		for(CInfClassCharacter *p = (CInfClassCharacter*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER); p; p = (CInfClassCharacter *)p->TypeNext())
+		if(p->IsHuman())
+			continue;
+
+		vec2 IntersectPos;
+		if(!closest_point_on_line(m_Pos, m_Pos2.value(), p->m_Pos, IntersectPos))
+			continue;
+
+		float Len = distance(p->m_Pos, IntersectPos);
+		if(Len < p->m_ProximityRadius + g_BarrierRadius)
 		{
-			if(p->IsHuman())
-				continue;
-
-			vec2 IntersectPos;
-			if(!closest_point_on_line(m_Pos, m_Pos2, p->m_Pos, IntersectPos))
-				continue;
-
-			float Len = distance(p->m_Pos, IntersectPos);
-			if(Len < p->m_ProximityRadius+g_BarrierRadius)
-			{
-				OnHitInfected(p);
-			}
+			OnHitInfected(p);
 		}
 	}
 
@@ -94,8 +74,9 @@ void CEngineerWall::Tick()
 
 void CEngineerWall::TickPaused()
 {
+	CPlacedObject::TickPaused();
+
 	++m_SnapStartTick;
-	++m_EndTick;
 }
 
 void CEngineerWall::Snap(int SnappingClient)
@@ -118,11 +99,7 @@ void CEngineerWall::Snap(int SnappingClient)
 		if(!pInfClassObject)
 			return;
 
-		if(HasSecondPosition())
-		{
-			pInfClassObject->m_EndTick = m_EndTick;
-		}
-		else
+		if(!HasSecondPosition())
 		{
 			// Snap fake second position to fix OwnerIcon position
 			pInfClassObject->m_EndTick = -1;
@@ -135,11 +112,11 @@ void CEngineerWall::Snap(int SnappingClient)
 	int SnappingClientVersion = GameServer()->GetClientVersion(SnappingClient);
 	CSnapContext Context(SnappingClientVersion);
 
-	GameServer()->SnapLaserObject(Context, GetId(), m_Pos, m_Pos2, m_SnapStartTick, m_Owner);
+	GameServer()->SnapLaserObject(Context, GetId(), m_Pos, m_Pos2.value_or(m_Pos), m_SnapStartTick, m_Owner);
 
 	if(HasSecondPosition())
 	{
-		GameServer()->SnapLaserObject(Context, m_EndPointId, m_Pos2, m_Pos2, Server()->Tick(), m_Owner);
+		GameServer()->SnapLaserObject(Context, m_EndPointId, m_Pos2.value(), m_Pos2.value(), Server()->Tick(), m_Owner);
 	}
 }
 
@@ -165,7 +142,10 @@ void CEngineerWall::OnHitInfected(CInfClassCharacter *pCharacter)
 			LifeSpanReducer += Server()->TickSpeed() * 5.0f * Factor;
 		}
 
-		m_EndTick -= LifeSpanReducer;
+		if (m_EndTick.has_value())
+		{
+			m_EndTick.value() -= LifeSpanReducer;
+		}
 	}
 
 	pCharacter->Die(m_Owner, EDamageType::LASER_WALL);
@@ -173,7 +153,7 @@ void CEngineerWall::OnHitInfected(CInfClassCharacter *pCharacter)
 
 void CEngineerWall::PrepareSnapData()
 {
-	const int RemainingTicks = m_EndTick - Server()->Tick();
+	const int RemainingTicks = m_EndTick.has_value() ? (m_EndTick.value() - Server()->Tick()) : 1000;
 
 	// Laser dieing animation
 	int LifeDiff = 0;

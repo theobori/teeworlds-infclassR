@@ -8,9 +8,6 @@
 
 class CSlugSlime;
 
-constexpr int GHOST_RADIUS = 11;
-constexpr int GHOST_SEARCHMAP_SIZE = (2 * GHOST_RADIUS + 1);
-
 class CInfClassInfected : public CInfClassPlayerClass
 {
 	MACRO_ALLOC_POOL_ID()
@@ -26,7 +23,7 @@ public:
 	void SetupSkinContext(CSkinContext *pOutput, bool ForSameTeam) const override;
 	static bool SetupSkin(const CSkinContext &Context, CWeakSkinInfo *pOutput, int DDNetVersion, int InfClassVersion);
 
-	int GetDefaultEmote() const override;
+	void ResetNormalEmote() override;
 	int GetJumps() const override;
 
 	void OnPlayerSnap(int SnappingClient, int InfClassVersion) override;
@@ -46,6 +43,7 @@ public:
 
 	void OnHookAttachedPlayer() override;
 
+	void OnWeaponFired(WeaponFireContext *pFireContext) override;
 	void OnHammerFired(WeaponFireContext *pFireContext) override;
 
 	void OnSlimeEffect(int Owner, int Damage, float DamageInterval) override;
@@ -74,12 +72,12 @@ protected:
 	void SpiderPreCoreTick();
 	bool HasDrainingHook() const;
 	bool HasHumansNearby();
+	void ResetInvisibility();
 
 	int m_HookDmgTick = 0;
 	int m_SlimeEffectTicks = 0;
 	int m_SlimeLastHealTick = 0;
 	int m_LaserWallTick = 0;
-	char m_GhostSearchMap[GHOST_SEARCHMAP_SIZE * GHOST_SEARCHMAP_SIZE];
 	int m_LastSeenTick = 0;
 
 	int m_VoodooTimeAlive = 0;

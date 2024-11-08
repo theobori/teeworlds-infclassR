@@ -440,6 +440,7 @@ CServer::~CServer()
 			free(Client.m_pPersistentData);
 		}
 	}
+	free(m_pPersistentData);
 
 	delete m_pRegister;
 	delete m_pConnectionPool;
@@ -675,94 +676,6 @@ int CServer::Init()
 /* INFECTION MODIFICATION START ***************************************/
 	m_aPreviousMap[0] = 0;
 	m_aCurrentMap[0] = 0;
-
-	SetFireDelay(INFWEAPON::NONE, 0);
-	SetFireDelay(INFWEAPON::HAMMER, 125);
-	SetFireDelay(INFWEAPON::GUN, 125);
-	SetFireDelay(INFWEAPON::SHOTGUN, 500);
-	SetFireDelay(INFWEAPON::GRENADE, 500);
-	SetFireDelay(INFWEAPON::LASER, 800);
-	SetFireDelay(INFWEAPON::NINJA, 800);
-	SetFireDelay(INFWEAPON::ENGINEER_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::SOLDIER_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::SCIENTIST_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::SCIENTIST_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::MEDIC_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::MEDIC_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::MEDIC_SHOTGUN, 250);
-	SetFireDelay(INFWEAPON::HERO_SHOTGUN, 250);
-	SetFireDelay(INFWEAPON::BIOLOGIST_SHOTGUN, 250);
-	SetFireDelay(INFWEAPON::BIOLOGIST_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::LOOPER_LASER, 250);
-	SetFireDelay(INFWEAPON::LOOPER_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::HERO_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::HERO_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::SNIPER_LASER, GetFireDelay(INFWEAPON::LASER));
-	SetFireDelay(INFWEAPON::NINJA_HAMMER, GetFireDelay(INFWEAPON::NINJA));
-	SetFireDelay(INFWEAPON::NINJA_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::MERCENARY_GRENADE, GetFireDelay(INFWEAPON::GRENADE));
-	SetFireDelay(INFWEAPON::MERCENARY_GUN, 50);
-	SetFireDelay(INFWEAPON::MERCENARY_LASER, 200);
-	SetFireDelay(INFWEAPON::BLINDING_LASER, GetFireDelay(INFWEAPON::LASER));
-
-	SetAmmoRegenTime(INFWEAPON::NONE, 0);
-	SetAmmoRegenTime(INFWEAPON::HAMMER, 0);
-	SetAmmoRegenTime(INFWEAPON::GUN, 500);
-	SetAmmoRegenTime(INFWEAPON::SHOTGUN, 0);
-	SetAmmoRegenTime(INFWEAPON::GRENADE, 0);
-	SetAmmoRegenTime(INFWEAPON::LASER, 0);
-	SetAmmoRegenTime(INFWEAPON::NINJA, 0);
-
-	SetAmmoRegenTime(INFWEAPON::ENGINEER_LASER, 6000);
-	SetAmmoRegenTime(INFWEAPON::SOLDIER_GRENADE, 7000);
-	SetAmmoRegenTime(INFWEAPON::SCIENTIST_LASER, 6000);
-	SetAmmoRegenTime(INFWEAPON::SCIENTIST_GRENADE, 10000);
-	SetAmmoRegenTime(INFWEAPON::MEDIC_GRENADE, 0);
-	SetAmmoRegenTime(INFWEAPON::MEDIC_LASER, 6000);
-	SetAmmoRegenTime(INFWEAPON::MEDIC_SHOTGUN, 750);
-	SetAmmoRegenTime(INFWEAPON::HERO_SHOTGUN, 750);
-	SetAmmoRegenTime(INFWEAPON::HERO_LASER, 3000);
-	SetAmmoRegenTime(INFWEAPON::HERO_GRENADE, 3000);
-	SetAmmoRegenTime(INFWEAPON::SNIPER_LASER, 2000);
-	SetAmmoRegenTime(INFWEAPON::MERCENARY_GRENADE, 5000);
-	SetAmmoRegenTime(INFWEAPON::MERCENARY_GUN, 125);
-	SetAmmoRegenTime(INFWEAPON::MERCENARY_LASER, 4000);
-	SetAmmoRegenTime(INFWEAPON::NINJA_HAMMER, 0);
-	SetAmmoRegenTime(INFWEAPON::NINJA_GRENADE, 15000);
-	SetAmmoRegenTime(INFWEAPON::BIOLOGIST_LASER, 175);
-	SetAmmoRegenTime(INFWEAPON::BIOLOGIST_SHOTGUN, 675);
-	SetAmmoRegenTime(INFWEAPON::LOOPER_LASER, 500);
-	SetAmmoRegenTime(INFWEAPON::LOOPER_GRENADE, 5000);
-	SetAmmoRegenTime(INFWEAPON::BLINDING_LASER, 10000);
-
-	SetMaxAmmo(INFWEAPON::NONE, -1);
-	SetMaxAmmo(INFWEAPON::HAMMER, -1);
-	SetMaxAmmo(INFWEAPON::GUN, 10);
-	SetMaxAmmo(INFWEAPON::SHOTGUN, 10);
-	SetMaxAmmo(INFWEAPON::GRENADE, 10);
-	SetMaxAmmo(INFWEAPON::LASER, 10);
-	SetMaxAmmo(INFWEAPON::NINJA, 10);
-	SetMaxAmmo(INFWEAPON::ENGINEER_LASER, 10);
-	SetMaxAmmo(INFWEAPON::SCIENTIST_LASER, 10);
-	SetMaxAmmo(INFWEAPON::SCIENTIST_GRENADE, 3);
-	SetMaxAmmo(INFWEAPON::SOLDIER_GRENADE, 10);
-	SetMaxAmmo(INFWEAPON::MEDIC_GRENADE, 10);
-	SetMaxAmmo(INFWEAPON::MEDIC_LASER, 1);
-	SetMaxAmmo(INFWEAPON::MEDIC_SHOTGUN, 10);
-	SetMaxAmmo(INFWEAPON::HERO_SHOTGUN, 10);
-	SetMaxAmmo(INFWEAPON::HERO_LASER, 10);
-	SetMaxAmmo(INFWEAPON::HERO_GRENADE, 10);
-	SetMaxAmmo(INFWEAPON::SNIPER_LASER, 10);
-	SetMaxAmmo(INFWEAPON::NINJA_HAMMER, -1);
-	SetMaxAmmo(INFWEAPON::NINJA_GRENADE, 5);
-	SetMaxAmmo(INFWEAPON::MERCENARY_GRENADE, 8);
-	SetMaxAmmo(INFWEAPON::MERCENARY_GUN, 40);
-	SetMaxAmmo(INFWEAPON::MERCENARY_LASER, 10);
-	SetMaxAmmo(INFWEAPON::BIOLOGIST_LASER, 10);
-	SetMaxAmmo(INFWEAPON::BIOLOGIST_SHOTGUN, 10);
-	SetMaxAmmo(INFWEAPON::LOOPER_LASER, 20);
-	SetMaxAmmo(INFWEAPON::LOOPER_GRENADE, 10);
-	SetMaxAmmo(INFWEAPON::BLINDING_LASER, 10);
 	/* INFECTION MODIFICATION END *****************************************/
 
 	return 0;
@@ -941,7 +854,7 @@ int CServer::GetClientVersion(int ClientId) const
 {
 	// Assume latest client version for server demos
 	if(ClientId == SERVER_DEMO_CLIENT)
-		return CLIENT_VERSIONNR;
+		return DDNET_VERSION_NUMBER;
 
 	CClientInfo Info;
 	if(GetClientInfo(ClientId, &Info))
@@ -1438,7 +1351,7 @@ void CServer::SendMap(int ClientId)
 		Msg.AddRaw(&m_aCurrentMapSha256[MapType].data, sizeof(m_aCurrentMapSha256[MapType].data));
 		Msg.AddInt(m_aCurrentMapCrc[MapType]);
 		Msg.AddInt(m_aCurrentMapSize[MapType]);
-		Msg.AddString("", 0); // HTTPS map download URL
+		Msg.AddString(m_MapDownloadUrl[MapType].c_str(), 0);
 		SendMsg(&Msg, MSGFLAG_VITAL, ClientId);
 	}
 	{
@@ -1618,10 +1531,12 @@ bool CServer::GenerateClientMap(const char *pMapFilePath, const char *pMapName)
 
 	char aClientMapDir[256];
 	char aClientMapName[256];
+	char aClientMapFileName[256];
 	const char *pConverterId = Config()->m_InfConverterId;
 	pConverterId = EventsDirector::GetMapConverterId(pConverterId);
 	str_format(aClientMapDir, sizeof(aClientMapDir), "clientmaps/%s", pConverterId);
-	str_format(aClientMapName, sizeof(aClientMapName), "%s/%s_%08x.map", aClientMapDir, pMapName, ServerMapCrc);
+	str_format(aClientMapFileName, sizeof(aClientMapFileName), "%s_%08x.map", pMapName, ServerMapCrc);
+	str_format(aClientMapName, sizeof(aClientMapName), "%s/%s", aClientMapDir, aClientMapFileName);
 
 	CMapConverter MapConverter(Storage(), m_pMap, Console());
 	if(!MapConverter.Load())
@@ -1671,6 +1586,7 @@ bool CServer::GenerateClientMap(const char *pMapFilePath, const char *pMapName)
 		void *pData;
 		Storage()->ReadFile(aClientMapName, IStorage::TYPE_ALL, &pData, &m_aCurrentMapSize[MAP_TYPE_SIX]);
 		m_apCurrentMapData[MAP_TYPE_SIX] = (unsigned char *)pData;
+		m_ClientMapFileName[MAP_TYPE_SIX] = aClientMapFileName;
 	}
 
 	return true;
@@ -2863,6 +2779,18 @@ int CServer::LoadMap(const char *pMapName)
 
 /* INFECTION MODIFICATION END *****************************************/
 
+	using namespace std::string_literals;
+
+	// SvMapsBaseUrl
+	if(Config()->m_SvMapsBaseUrl[0])
+	{
+		m_MapDownloadUrl[MAP_TYPE_SIX] = Config()->m_SvMapsBaseUrl + "/"s + m_ClientMapFileName[MAP_TYPE_SIX];
+	}
+	else
+	{
+		m_MapDownloadUrl[MAP_TYPE_SIX].clear();
+	}
+
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_aPrevStates[i] = m_aClients[i].m_State;
 
@@ -2891,6 +2819,8 @@ int CServer::Run()
 			Client.m_pPersistentData = nullptr;
 		}
 	}
+
+	m_pPersistentData = malloc(GameServer()->PersistentDataSize());
 
 	//Choose a random map from the rotation
 	if(!str_length(g_Config.m_SvMap) && str_length(g_Config.m_SvMaprotation))
@@ -2998,8 +2928,8 @@ int CServer::Run()
 		return -1;
 	}
 
-	IEngine *pEngine = Kernel()->RequestInterface<IEngine>();
-	m_pRegister = CreateRegister(&g_Config, m_pConsole, pEngine, &m_Http, this->Port(), m_NetServer.GetGlobalToken());
+	m_pEngine = Kernel()->RequestInterface<IEngine>();
+	m_pRegister = CreateRegister(&g_Config, m_pConsole, m_pEngine, &m_Http, this->Port(), m_NetServer.GetGlobalToken());
 
 	m_NetServer.SetCallbacks(NewClientCallback, NewClientNoAuthCallback, ClientRejoinCallback, DelClientCallback, this);
 
@@ -3009,7 +2939,7 @@ int CServer::Run()
 	str_format(aBuf, sizeof(aBuf), "server name is '%s'", Config()->m_SvName);
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 
-	GameServer()->OnInit();
+	GameServer()->OnInit(nullptr);
 	if(ErrorShutdown())
 	{
 		m_RunServer = STOPPING;
@@ -3030,7 +2960,6 @@ int CServer::Run()
 		bool NonActive = false;
 		bool PacketWaiting = false;
 
-		m_Lastheartbeat = 0;
 		m_GameStartTime = time_get();
 
 		UpdateServerInfo();
@@ -3075,7 +3004,7 @@ int CServer::Run()
 						}
 					}
 
-					GameServer()->OnShutdown();
+					GameServer()->OnShutdown(m_pPersistentData);
 
 					for(int ClientId = 0; ClientId < MAX_CLIENTS; ClientId++)
 					{
@@ -3099,10 +3028,10 @@ int CServer::Run()
 					}
 
 					m_GameStartTime = time_get();
-					m_CurrentGameTick = 0;
+					m_CurrentGameTick = MIN_TICK;
 					m_ServerInfoFirstRequest = 0;
 					Kernel()->ReregisterInterface(GameServer());
-					GameServer()->OnInit();
+					GameServer()->OnInit(m_pPersistentData);
 					if(ErrorShutdown())
 					{
 						break;
@@ -3117,7 +3046,7 @@ int CServer::Run()
 				}
 			}
 
-			while(t > TickStartTime(m_CurrentGameTick+1))
+			while(t > TickStartTime(m_CurrentGameTick + 1))
 			{
 				for(int c = 0; c < MAX_CLIENTS; c++)
 				{
@@ -3220,27 +3149,27 @@ int CServer::Run()
 					DoSnapshot();
 
 				UpdateClientRconCommands();
-			}
 
-			// master server stuff
-			m_pRegister->Update();
+				// master server stuff
+				m_pRegister->Update();
 
-			if(m_ServerInfoNeedsUpdate)
-				UpdateServerInfo();
+				if(m_ServerInfoNeedsUpdate)
+					UpdateServerInfo();
 
-			if(!NonActive)
-				PumpNetwork(PacketWaiting);
-
-			for(int i = 0; i < MAX_CLIENTS; ++i)
-			{
-				if(m_aClients[i].m_State == CClient::STATE_REDIRECTED)
+				for(int i = 0; i < MAX_CLIENTS; ++i)
 				{
-					if(time_get() > m_aClients[i].m_RedirectDropTime)
+					if(m_aClients[i].m_State == CClient::STATE_REDIRECTED)
 					{
-						m_NetServer.Drop(i, EClientDropType::Redirected, "redirected");
+						if(time_get() > m_aClients[i].m_RedirectDropTime)
+						{
+							m_NetServer.Drop(i, EClientDropType::Redirected, "redirected");
+						}
 					}
 				}
 			}
+
+			if(!NonActive)
+				PumpNetwork(PacketWaiting);
 
 			NonActive = true;
 			for(const auto &Client : m_aClients)
@@ -3312,9 +3241,11 @@ int CServer::Run()
 
 	m_pRegister->OnShutdown();
 	m_Econ.Shutdown();
+	Engine()->ShutdownJobs();
 
-	GameServer()->OnShutdown();
+	GameServer()->OnShutdown(nullptr);
 	m_pMap->Unload();
+	DbPool()->OnShutdown();
 
 /* DDNET MODIFICATION START *******************************************/
 #ifdef CONF_SQL
@@ -3783,68 +3714,6 @@ void CServer::ConDumpSqlServers(IConsole::IResult *pResult, void *pUserData)
 	}
 }
 
-void CServer::ConSetWeaponFireDelay(IConsole::IResult *pResult, void *pUserData)
-{
-	CServer *pSelf = (CServer *)pUserData;
-	if(pResult->NumArguments() != 2)
-		return;
-
-	int WeaponId = pResult->GetInteger(0);
-	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
-	{
-		return;
-	}
-	int Interval = pResult->GetInteger(1);
-	if(Interval < 0)
-	{
-		return;
-	}
-
-	pSelf->SetFireDelay(static_cast<INFWEAPON>(WeaponId), Interval);
-}
-
-void CServer::ConSetWeaponAmmoRegen(IConsole::IResult *pResult, void *pUserData)
-{
-	CServer *pSelf = (CServer *)pUserData;
-	if(pResult->NumArguments() != 2)
-		return;
-
-	int WeaponId = pResult->GetInteger(0);
-	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
-	{
-		return;
-	}
-	int Interval = pResult->GetInteger(1);
-	if(Interval < 0)
-	{
-		return;
-	}
-
-	pSelf->SetAmmoRegenTime(static_cast<INFWEAPON>(WeaponId), Interval);
-
-	return;
-}
-
-void CServer::ConSetWeaponMaxAmmo(IConsole::IResult *pResult, void *pUserData)
-{
-	CServer *pSelf = (CServer *)pUserData;
-	if(pResult->NumArguments() != 2)
-		return;
-
-	int WeaponId = pResult->GetInteger(0);
-	if((WeaponId < 0) || (WeaponId >= NB_INFWEAPON))
-	{
-		return;
-	}
-	int Interval = pResult->GetInteger(1);
-	if(Interval < 0)
-	{
-		return;
-	}
-
-	pSelf->SetMaxAmmo(static_cast<INFWEAPON>(WeaponId), Interval);
-}
-
 void CServer::LogoutClient(int ClientId, const char *pReason)
 {
 	CMsgPacker Msg(NETMSG_RCON_AUTH_STATUS, true);
@@ -4016,15 +3885,6 @@ void CServer::RegisterCommands()
 	Console()->Register("unmute", "s[ClientId]", CFGFLAG_SERVER, ConUnmute, this, "Unmute player with specified id");
 	Console()->Register("whisper", "s[id] r[txt]", CFGFLAG_SERVER, ConWhisper, this, "Analogous to 'Say' but sent to a single client only");
 
-/* INFECTION MODIFICATION START ***************************************/
-	Console()->Register("inf_set_weapon_fire_delay", "i[weapon] i[msec]", CFGFLAG_SERVER, ConSetWeaponFireDelay, this,
-		"Set InfClass weapon fire delay");
-	Console()->Register("inf_set_weapon_ammo_regen", "i[weapon] i[msec]", CFGFLAG_SERVER, ConSetWeaponAmmoRegen, this,
-		"Set InfClass weapon ammo regen interval");
-	Console()->Register("inf_set_weapon_max_ammo", "i[weapon] i[ammo]", CFGFLAG_SERVER, ConSetWeaponMaxAmmo, this,
-		"Set InfClass weapon max ammo");
-	/* INFECTION MODIFICATION END *************CServer::~CServer()****************************/
-
 	// register console commands in sub parts
 	m_ServerBan.InitServerBan(Console(), Storage(), this);
 	m_NetSession.Init();
@@ -4142,36 +4002,6 @@ void CServer::SetClientLanguage(int ClientId, const char* pLanguage)
 
 	dbg_msg("lang", "set_language ClientId=%d lang=%s addr=%s", ClientId, pLanguage, aAddrStr);
 	str_copy(m_aClients[ClientId].m_aLanguage, pLanguage, sizeof(m_aClients[ClientId].m_aLanguage));
-}
-
-int CServer::GetFireDelay(INFWEAPON WID)
-{
-	return m_InfFireDelay[static_cast<int>(WID)];
-}
-
-void CServer::SetFireDelay(INFWEAPON WID, int Time)
-{
-	m_InfFireDelay[static_cast<int>(WID)] = Time;
-}
-
-int CServer::GetAmmoRegenTime(INFWEAPON WID)
-{
-	return m_InfAmmoRegenTime[static_cast<int>(WID)];
-}
-
-void CServer::SetAmmoRegenTime(INFWEAPON WID, int Time)
-{
-	m_InfAmmoRegenTime[static_cast<int>(WID)] = Time;
-}
-
-int CServer::GetMaxAmmo(INFWEAPON WID)
-{
-	return m_InfMaxAmmo[static_cast<int>(WID)];
-}
-
-void CServer::SetMaxAmmo(INFWEAPON WID, int n)
-{
-	m_InfMaxAmmo[static_cast<int>(WID)] = n;
 }
 
 int CServer::GetClientNbRound(int ClientId)

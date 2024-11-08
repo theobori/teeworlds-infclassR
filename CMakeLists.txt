@@ -2,9 +2,9 @@
 
 cmake_minimum_required(VERSION 3.15...3.29)
 project(InfclassR
-    VERSION 1.5.3
+    VERSION 1.6.0
 )
-set(VERSION_SUFFIX "")
+set(VERSION_SUFFIX "a1")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -753,6 +753,7 @@ set_glob(GAME_SHARED GLOB src/game
   infclass/classes.h
   infclass/damage_type.cpp
   infclass/damage_type.h
+  infclass/weapons.h
   layers.cpp
   layers.h
   mapitems.h
@@ -902,6 +903,8 @@ set_glob(GAME_SERVER GLOB_RECURSE src/game/server
   infclass/entities/hero-flag.h
   infclass/entities/ic-pickup.cpp
   infclass/entities/ic-pickup.h
+  infclass/entities/ic_door.cpp
+  infclass/entities/ic_door.h
   infclass/entities/infc-laser.cpp
   infclass/entities/infc-laser.h
   infclass/entities/infc-placed-object.cpp

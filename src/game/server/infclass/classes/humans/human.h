@@ -93,22 +93,16 @@ protected:
 	void ActivateNinja(WeaponFireContext *pFireContext);
 	void PlaceEngineerWall(WeaponFireContext *pFireContext);
 	void PlaceLooperWall(WeaponFireContext *pFireContext);
-	void FireSoldierBomb(WeaponFireContext *pFireContext);
 	void FireMercenaryBomb(WeaponFireContext *pFireContext);
 	void PlaceScientistMine(WeaponFireContext *pFireContext);
 	void PlaceTurret(WeaponFireContext *pFireContext);
 
 	void OnMercGrenadeFired(WeaponFireContext *pFireContext);
 	void OnMedicGrenadeFired(WeaponFireContext *pFireContext);
-	void OnPortalGunFired(WeaponFireContext *pFireContext);
 
-	void OnBlindingLaserFired(WeaponFireContext *pFireContext);
-	void OnBiologistLaserFired(WeaponFireContext *pFireContext);
 	void OnMercLaserFired(WeaponFireContext *pFireContext);
 
 	bool PositionLockAvailable() const;
-
-	bool FindPortalPosition(vec2 *pPosition);
 
 private:
 	icArray<int, 2> m_BarrierHintIds;

@@ -1,7 +1,5 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.				*/
-#include <new>
-
 #include <base/logger.h>
 #include <base/math.h>
 #include <engine/shared/config.h>
@@ -16,7 +14,6 @@
 #include <game/version.h>
 #include <game/collision.h>
 #include <game/gamecore.h>
-#include <iostream>
 #include <algorithm>
 
 #include <game/server/entities/character.h>
@@ -174,7 +171,8 @@ void CGameContext::Clear()
 	{
 		m_BroadcastStates[i].m_NoChangeTick = 0;
 		m_BroadcastStates[i].m_LifeSpanTick = 0;
-		m_BroadcastStates[i].m_Priority = BROADCAST_PRIORITY_LOWEST;
+		m_BroadcastStates[i].m_Priority = EBroadcastPriority::LOWEST;
+		m_BroadcastStates[i].m_TimedPriority = EBroadcastPriority::LOWEST;
 		m_BroadcastStates[i].m_PrevMessage[0] = 0;
 		m_BroadcastStates[i].m_NextMessage[0] = 0;
 	}
@@ -597,14 +595,14 @@ void CGameContext::SendMOTD_Localization(int To, const char* pText, ...)
 	}
 }
 
-void CGameContext::AddBroadcast(int ClientId, const char* pText, int Priority, int LifeSpan)
+void CGameContext::AddBroadcast(int ClientId, const char* pText, EBroadcastPriority Priority, int LifeSpan)
 {
 	if(LifeSpan > 0)
 	{
 		if(m_BroadcastStates[ClientId].m_TimedPriority > Priority)
 			return;
-			
-		str_copy(m_BroadcastStates[ClientId].m_TimedMessage, pText, sizeof(m_BroadcastStates[ClientId].m_TimedMessage));
+
+		str_copy(m_BroadcastStates[ClientId].m_TimedMessage, pText);
 		m_BroadcastStates[ClientId].m_LifeSpanTick = LifeSpan;
 		m_BroadcastStates[ClientId].m_TimedPriority = Priority;
 	}
@@ -612,8 +610,8 @@ void CGameContext::AddBroadcast(int ClientId, const char* pText, int Priority, i
 	{
 		if(m_BroadcastStates[ClientId].m_Priority > Priority)
 			return;
-			
-		str_copy(m_BroadcastStates[ClientId].m_NextMessage, pText, sizeof(m_BroadcastStates[ClientId].m_NextMessage));
+
+		str_copy(m_BroadcastStates[ClientId].m_NextMessage, pText);
 		m_BroadcastStates[ClientId].m_Priority = Priority;
 	}
 }
@@ -706,6 +704,19 @@ void CGameContext::ReloadChangelog()
 	}
 }
 
+bool CGameContext::IsPaused() const
+{
+	return m_World.m_Paused;
+}
+
+void CGameContext::SetPaused(bool Paused)
+{
+	if(m_pController->IsGameOver())
+		return;
+
+	m_World.m_Paused = Paused;
+}
+
 bool CGameContext::MapExists(const char *pMapName) const
 {
 	char aMapFilename[128];
@@ -715,7 +726,7 @@ bool CGameContext::MapExists(const char *pMapName) const
 	return Storage()->FindFile(aMapFilename, "maps", IStorage::TYPE_ALL, aBuf, sizeof(aBuf));
 }
 
-void CGameContext::SendBroadcast(int To, const char *pText, int Priority, int LifeSpan)
+void CGameContext::SendBroadcast(int To, const char *pText, EBroadcastPriority Priority, int LifeSpan)
 {
 	int Start = (To < 0 ? 0 : To);
 	int End = (To < 0 ? MAX_CLIENTS : To+1);
@@ -735,7 +746,7 @@ void CGameContext::SendBroadcast(int To, const char *pText, int Priority, int Li
 	}
 }
 
-void CGameContext::ClearBroadcast(int To, int Priority)
+void CGameContext::ClearBroadcast(int To, EBroadcastPriority Priority)
 {
 	SendBroadcast(To, "", Priority, BROADCAST_DURATION_REALTIME);
 }
@@ -763,7 +774,7 @@ const char *CGameContext::GetChatCategoryPrefix(int Category)
 	return "";
 }
 
-void CGameContext::SendBroadcast_Localization(int To, int Priority, int LifeSpan, const char* pText, ...)
+void CGameContext::SendBroadcast_Localization(int To, EBroadcastPriority Priority, int LifeSpan, const char* pText, ...)
 {
 	int Start = (To < 0 ? 0 : To);
 	int End = (To < 0 ? MAX_CLIENTS : To+1);
@@ -795,7 +806,7 @@ void CGameContext::SendBroadcast_Localization(int To, int Priority, int LifeSpan
 	va_end(VarArgs);
 }
 
-void CGameContext::SendBroadcast_Localization_P(int To, int Priority, int LifeSpan, int Number, const char* pText, ...)
+void CGameContext::SendBroadcast_Localization_P(int To, EBroadcastPriority Priority, int LifeSpan, int Number, const char* pText, ...)
 {
 	int Start = (To < 0 ? 0 : To);
 	int End = (To < 0 ? MAX_CLIENTS : To+1);
@@ -826,13 +837,13 @@ void CGameContext::SendChat(int ChatterClientId, int Team, const char *pText, in
 			return;
 
 	char aBuf[256], aText[256];
-	str_copy(aText, pText, sizeof(aText));
+	str_copy(aText, pText);
 	if(ChatterClientId >= 0 && ChatterClientId < MAX_CLIENTS)
 		str_format(aBuf, sizeof(aBuf), "%d:%d:%s: %s", ChatterClientId, Team, Server()->ClientName(ChatterClientId), pText);
 	else if(ChatterClientId == -2)
 	{
 		str_format(aBuf, sizeof(aBuf), "### %s", aText);
-		str_copy(aText, aBuf, sizeof(aText));
+		str_copy(aText, aBuf);
 		ChatterClientId = -1;
 	}
 	else
@@ -958,9 +969,9 @@ void CGameContext::StartVote(const char *pDesc, const char *pCommand, const char
 
 	// start vote
 	m_VoteCloseTime = time_get() + time_freq() * g_Config.m_SvVoteTime;
-	str_copy(m_aVoteDescription, pDesc, sizeof(m_aVoteDescription));
-	str_copy(m_aVoteCommand, pCommand, sizeof(m_aVoteCommand));
-	str_copy(m_aVoteReason, pReason, sizeof(m_aVoteReason));
+	str_copy(m_aVoteDescription, pDesc);
+	str_copy(m_aVoteCommand, pCommand);
+	str_copy(m_aVoteReason, pReason);
 	SendVoteSet(-1);
 	m_VoteUpdate = true;
 }
@@ -1258,12 +1269,15 @@ void CGameContext::OnTick()
 	CheckPureTuning();
 	
 	m_Collision.SetTime(m_pController->GetTime());
+	m_World.SetGameTick(Server()->Tick());
 
 	m_pController->TickBeforeWorld();
 
 	// copy tuning
 	m_World.m_Core.m_Tuning = m_Tuning;
 	m_World.Tick();
+
+	UpdatePlayerMaps();
 
 	//if(world.paused) // make sure that the game object always updates
 	m_pController->Tick();
@@ -1295,9 +1309,8 @@ void CGameContext::OnTick()
 					Msg.m_pDescription = "";
 					Msg.m_pReason = "";
 					Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
-					
-					str_copy(m_VoteLanguage[i], "en", sizeof(m_VoteLanguage[i]));				
-					
+
+					str_copy(m_VoteLanguage[i], "en");
 				}
 				else
 				{
@@ -1314,7 +1327,7 @@ void CGameContext::OnTick()
 		{
 			if(m_BroadcastStates[i].m_LifeSpanTick > 0 && m_BroadcastStates[i].m_TimedPriority > m_BroadcastStates[i].m_Priority)
 			{
-				str_copy(m_BroadcastStates[i].m_NextMessage, m_BroadcastStates[i].m_TimedMessage, sizeof(m_BroadcastStates[i].m_NextMessage));
+				str_copy(m_BroadcastStates[i].m_NextMessage, m_BroadcastStates[i].m_TimedMessage);
 			}
 			
 			//Send broadcast only if the message is different, or to fight auto-fading
@@ -1327,7 +1340,7 @@ void CGameContext::OnTick()
 				Msg.m_pMessage = m_BroadcastStates[i].m_NextMessage;
 				Server()->SendPackMsg(&Msg, MSGFLAG_VITAL|MSGFLAG_NORECORD, i);
 				
-				str_copy(m_BroadcastStates[i].m_PrevMessage, m_BroadcastStates[i].m_NextMessage, sizeof(m_BroadcastStates[i].m_PrevMessage));
+				str_copy(m_BroadcastStates[i].m_PrevMessage, m_BroadcastStates[i].m_NextMessage);
 				
 				m_BroadcastStates[i].m_NoChangeTick = 0;
 			}
@@ -1341,17 +1354,17 @@ void CGameContext::OnTick()
 			if(m_BroadcastStates[i].m_LifeSpanTick <= 0)
 			{
 				m_BroadcastStates[i].m_TimedMessage[0] = 0;
-				m_BroadcastStates[i].m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
+				m_BroadcastStates[i].m_TimedPriority = EBroadcastPriority::LOWEST;
 			}
 			m_BroadcastStates[i].m_NextMessage[0] = 0;
-			m_BroadcastStates[i].m_Priority = BROADCAST_PRIORITY_LOWEST;
+			m_BroadcastStates[i].m_Priority = EBroadcastPriority::LOWEST;
 		}
 		else
 		{
 			m_BroadcastStates[i].m_NoChangeTick = 0;
 			m_BroadcastStates[i].m_LifeSpanTick = 0;
-			m_BroadcastStates[i].m_Priority = BROADCAST_PRIORITY_LOWEST;
-			m_BroadcastStates[i].m_TimedPriority = BROADCAST_PRIORITY_LOWEST;
+			m_BroadcastStates[i].m_Priority = EBroadcastPriority::LOWEST;
+			m_BroadcastStates[i].m_TimedPriority = EBroadcastPriority::LOWEST;
 			m_BroadcastStates[i].m_PrevMessage[0] = 0;
 			m_BroadcastStates[i].m_NextMessage[0] = 0;
 			m_BroadcastStates[i].m_TimedMessage[0] = 0;
@@ -1585,7 +1598,7 @@ void CGameContext::OnClientPredictedInput(int ClientId, void *pInput)
 		return;
 
 	// set to last sent input when no new input has been sent
-	CNetObj_PlayerInput *pApplyInput = (CNetObj_PlayerInput *)pInput;
+	const CNetObj_PlayerInput *pApplyInput = (CNetObj_PlayerInput *)pInput;
 	if(pApplyInput == nullptr)
 	{
 		pApplyInput = &m_aLastPlayerInput[ClientId];
@@ -1777,7 +1790,6 @@ void CGameContext::OnClientEnter(int ClientId)
 
 	Server()->ExpireServerInfo();
 
-	CPlayer *pNewPlayer = m_apPlayers[ClientId];
 	mem_zero(&m_aLastPlayerInput[ClientId], sizeof(m_aLastPlayerInput[ClientId]));
 	m_aPlayerHasInput[ClientId] = false;
 }
@@ -1846,7 +1858,7 @@ void CGameContext::OnClientConnected(int ClientId, void *pData)
 
 	m_BroadcastStates[ClientId].m_NoChangeTick = 0;
 	m_BroadcastStates[ClientId].m_LifeSpanTick = 0;
-	m_BroadcastStates[ClientId].m_Priority = BROADCAST_PRIORITY_LOWEST;
+	m_BroadcastStates[ClientId].m_Priority = EBroadcastPriority::LOWEST;
 	m_BroadcastStates[ClientId].m_PrevMessage[0] = 0;
 	m_BroadcastStates[ClientId].m_NextMessage[0] = 0;
 
@@ -2174,7 +2186,7 @@ void CGameContext::OnCallVoteNetMessage(const CNetMsg_Cl_CallVote *pMsg, int Cli
 	}
 	if(pMsg->m_pReason[0])
 	{
-		str_copy(aReason, pMsg->m_pReason, sizeof(aReason));
+		str_copy(aReason, pMsg->m_pReason);
 	}
 
 	if(str_comp_nocase(pMsg->m_pType, "kick") == 0)
@@ -2412,14 +2424,14 @@ void CGameContext::OnSetTeamNetMessage(const CNetMsg_Cl_SetTeam *pMsg, int Clien
 		int TimeLeft = (pPlayer->m_TeamChangeTick - Server()->Tick()) / Server()->TickSpeed();
 		char aBuf[128];
 		str_format(aBuf, sizeof(aBuf), "Time to wait before changing team: %02d:%02d", TimeLeft / 60, TimeLeft % 60);
-		SendBroadcast(ClientId, aBuf, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
+		SendBroadcast(ClientId, aBuf, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
 		return;
 	}
 
 	/* INFECTION MODIFICATION START ***************************************/
 	if(pMsg->m_Team == TEAM_SPECTATORS && !m_pController->CanJoinTeam(TEAM_SPECTATORS, ClientId))
 	{
-		SendBroadcast_Localization(ClientId, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("You can't join the spectators right now"), NULL);
+		SendBroadcast_Localization(ClientId, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE, _("You can't join the spectators right now"), NULL);
 		return;
 	}
 	/* INFECTION MODIFICATION END *****************************************/
@@ -2476,7 +2488,7 @@ void CGameContext::OnChangeInfoNetMessage(const CNetMsg_Cl_ChangeInfo *pMsg, int
 	if(!pPlayer->m_ClientNameLocked && Server()->WouldClientNameChange(ClientId, pMsg->m_pName))
 	{
 		char aOldName[MAX_NAME_LENGTH];
-		str_copy(aOldName, Server()->ClientName(ClientId), sizeof(aOldName));
+		str_copy(aOldName, Server()->ClientName(ClientId));
 
 		Server()->SetClientName(ClientId, pMsg->m_pName);
 
@@ -2603,7 +2615,7 @@ void CGameContext::OnStartInfoNetMessage(const CNetMsg_Cl_StartInfo *pMsg, int C
 			CNetMsg_Sv_VoteSet Msg;
 			Msg.m_Timeout = 10;
 			Msg.m_pReason = "";
-			str_copy(m_VoteLanguage[ClientId], pLangForVote, sizeof(m_VoteLanguage[ClientId]));
+			str_copy(m_VoteLanguage[ClientId], pLangForVote);
 			Msg.m_pDescription = Server()->Localization()->Localize(m_VoteLanguage[ClientId], _("Switch language to english?"));
 			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, ClientId);
 			m_VoteLanguageTick[ClientId] = 10 * Server()->TickSpeed();
@@ -2741,7 +2753,7 @@ void CGameContext::ConTimeout(IConsole::IResult *pResult, void *pUserData)
 	}
 
 	pSelf->Server()->SetTimeoutProtected(pResult->m_ClientId);
-	str_copy(pPlayer->m_aTimeoutCode, pResult->GetString(0), sizeof(pPlayer->m_aTimeoutCode));
+	str_copy(pPlayer->m_aTimeoutCode, pResult->GetString(0));
 }
 
 void CGameContext::ConMe(IConsole::IResult *pResult, void *pUserData)
@@ -2861,11 +2873,7 @@ void CGameContext::ConTuneDump(IConsole::IResult *pResult, void *pUserData)
 void CGameContext::ConPause(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
-
-	if(pSelf->m_pController->IsGameOver())
-		return;
-
-	pSelf->m_World.m_Paused ^= 1;
+	pSelf->SetPaused(!pSelf->IsPaused());
 }
 
 void CGameContext::ConChangeMap(IConsole::IResult *pResult, void *pUserData)
@@ -2985,7 +2993,7 @@ void CGameContext::ConBroadcast(IConsole::IResult *pResult, void *pUserData)
 	CGameContext *pSelf = (CGameContext *)pUserData;
 
 	char aBuf[1024];
-	str_copy(aBuf, pResult->GetString(0), sizeof(aBuf));
+	str_copy(aBuf, pResult->GetString(0));
 
 	int i, j;
 	for(i = 0, j = 0; aBuf[i]; i++, j++)
@@ -3002,7 +3010,7 @@ void CGameContext::ConBroadcast(IConsole::IResult *pResult, void *pUserData)
 	}
 	aBuf[j] = '\0';
 
-	pSelf->SendBroadcast(-1, aBuf, BROADCAST_PRIORITY_SERVERANNOUNCE, pSelf->Server()->TickSpeed() * 3);
+	pSelf->SendBroadcast(-1, aBuf, EBroadcastPriority::SERVERANNOUNCE, pSelf->Server()->TickSpeed() * 3);
 }
 
 void CGameContext::ConSay(IConsole::IResult *pResult, void *pUserData)
@@ -3042,6 +3050,16 @@ void CGameContext::ConSetTeamAll(IConsole::IResult *pResult, void *pUserData)
 			pSelf->m_pController->DoTeamChange(pPlayer, Team, false);
 }
 
+void CGameContext::ConInsertVote(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	int Index = pResult->GetInteger(0);
+	const char *pDescription = pResult->GetString(1);
+	const char *pCommand = pResult->GetString(2);
+
+	pSelf->InsertVote(Index, pDescription, pCommand);
+}
+
 void CGameContext::ConAddVote(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
@@ -3051,12 +3069,15 @@ void CGameContext::ConAddVote(IConsole::IResult *pResult, void *pUserData)
 	pSelf->AddVote(pDescription, pCommand);
 }
 
-void CGameContext::AddVote(const char *pDescription, const char *pCommand)
+bool CGameContext::InsertVote(int Position, const char *pDescription, const char *pCommand)
 {
+	if((Position < 0) || (Position > m_NumVoteOptions))
+		Position = m_NumVoteOptions;
+
 	if(m_NumVoteOptions == MAX_VOTE_OPTIONS)
 	{
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "maximum number of vote options reached");
-		return;
+		return false;
 	}
 
 	// check for valid option
@@ -3065,7 +3086,7 @@ void CGameContext::AddVote(const char *pDescription, const char *pCommand)
 		char aBuf[256];
 		str_format(aBuf, sizeof(aBuf), "skipped invalid command '%s'", pCommand);
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
-		return;
+		return false;
 	}
 	while(*pDescription == ' ')
 		pDescription++;
@@ -3074,7 +3095,7 @@ void CGameContext::AddVote(const char *pDescription, const char *pCommand)
 		char aBuf[256];
 		str_format(aBuf, sizeof(aBuf), "skipped invalid option '%s'", pDescription);
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
-		return;
+		return false;
 	}
 
 	// check for duplicate entry
@@ -3086,61 +3107,119 @@ void CGameContext::AddVote(const char *pDescription, const char *pCommand)
 			char aBuf[256];
 			str_format(aBuf, sizeof(aBuf), "option '%s' already exists", pDescription);
 			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
-			return;
+			return false;
 		}
 		pOption = pOption->m_pNext;
 	}
 
 	// add the option
-	++m_NumVoteOptions;
 	int Len = str_length(pCommand);
 
 	pOption = (CVoteOptionServer *)m_pVoteOptionHeap->Allocate(sizeof(CVoteOptionServer) + Len, alignof(CVoteOptionServer));
-	pOption->m_pNext = 0;
-	pOption->m_pPrev = m_pVoteOptionLast;
-	if(pOption->m_pPrev)
-		pOption->m_pPrev->m_pNext = pOption;
-	m_pVoteOptionLast = pOption;
+	if(Position == m_NumVoteOptions)
+	{
+		// Append
+		pOption->m_pNext = 0;
+		pOption->m_pPrev = m_pVoteOptionLast;
+		if(pOption->m_pPrev)
+			pOption->m_pPrev->m_pNext = pOption;
+		m_pVoteOptionLast = pOption;
+	}
+	else
+	{
+		// Insert
+		pOption->m_pPrev = nullptr;
+		pOption->m_pNext = m_pVoteOptionFirst;
+		if(Position == 0)
+		{
+			m_pVoteOptionFirst = pOption;
+		}
+		else
+		{
+			int CurrentPos = 1;
+			CVoteOptionServer *pPrevOption = m_pVoteOptionFirst;
+			while (CurrentPos < Position)
+			{
+				pPrevOption = pPrevOption->m_pNext;
+				++CurrentPos;
+			}
+
+			pOption->m_pPrev = pPrevOption;
+			pOption->m_pNext = pPrevOption->m_pNext;
+
+			pOption->m_pPrev->m_pNext = pOption;
+			pOption->m_pNext->m_pPrev = pOption;
+		}
+	}
+
 	if(!m_pVoteOptionFirst)
 		m_pVoteOptionFirst = pOption;
 
-	str_copy(pOption->m_aDescription, pDescription, sizeof(pOption->m_aDescription));
+	str_copy(pOption->m_aDescription, pDescription);
 	mem_copy(pOption->m_aCommand, pCommand, Len + 1);
+	++m_NumVoteOptions;
+
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "added option '%s' '%s'", pOption->m_aDescription, pOption->m_aCommand);
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+
+	if(pOption->m_pNext)
+	{
+		// Inserted
+
+		CNetMsg_Sv_VoteClearOptions VoteClearOptionsMsg;
+		Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
+
+		// reset sending of vote options
+		for(auto &pPlayer : m_apPlayers)
+		{
+			if(pPlayer)
+				pPlayer->m_SendVoteIndex = 0;
+		}
+	}
+
+	return true;
+}
+
+void CGameContext::AddVote(const char *pDescription, const char *pCommand)
+{
+	InsertVote(m_NumVoteOptions, pDescription, pCommand);
 }
 
 void CGameContext::ConRemoveVote(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
 	const char *pDescription = pResult->GetString(0);
+	pSelf->RemoveVote(pDescription);
+}
 
+void CGameContext::RemoveVote(const char *pVoteOption)
+{
 	// check for valid option
-	CVoteOptionServer *pOption = pSelf->m_pVoteOptionFirst;
+	CVoteOptionServer *pOption = m_pVoteOptionFirst;
 	while(pOption)
 	{
-		if(str_comp_nocase(pDescription, pOption->m_aDescription) == 0)
+		if(str_comp_nocase(pVoteOption, pOption->m_aDescription) == 0)
 			break;
-		if(str_comp_nocase(pDescription, pOption->m_aCommand) == 0)
+		if(str_comp_nocase(pVoteOption, pOption->m_aCommand) == 0)
 			break;
 		pOption = pOption->m_pNext;
 	}
 	if(!pOption)
 	{
 		char aBuf[256];
-		str_format(aBuf, sizeof(aBuf), "option '%s' does not exist", pDescription);
-		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
+		str_format(aBuf, sizeof(aBuf), "option '%s' does not exist", pVoteOption);
+		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 		return;
 	}
 
 	// start reloading vote option list
 	// clear vote options
 	CNetMsg_Sv_VoteClearOptions VoteClearOptionsMsg;
-	pSelf->Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
+	Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
 
 	// reset sending of vote options
-	for(auto &pPlayer : pSelf->m_apPlayers)
+	for(auto &pPlayer : m_apPlayers)
 	{
 		if(pPlayer)
 			pPlayer->m_SendVoteIndex = 0;
@@ -3148,13 +3227,13 @@ void CGameContext::ConRemoveVote(IConsole::IResult *pResult, void *pUserData)
 
 	// TODO: improve this
 	// remove the option
-	--pSelf->m_NumVoteOptions;
+	--m_NumVoteOptions;
 
 	CHeap *pVoteOptionHeap = new CHeap();
 	CVoteOptionServer *pVoteOptionFirst = 0;
 	CVoteOptionServer *pVoteOptionLast = 0;
-	int NumVoteOptions = pSelf->m_NumVoteOptions;
-	for(CVoteOptionServer *pSrc = pSelf->m_pVoteOptionFirst; pSrc; pSrc = pSrc->m_pNext)
+	int NumVoteOptions = m_NumVoteOptions;
+	for(CVoteOptionServer *pSrc = m_pVoteOptionFirst; pSrc; pSrc = pSrc->m_pNext)
 	{
 		if(pSrc == pOption)
 			continue;
@@ -3170,16 +3249,34 @@ void CGameContext::ConRemoveVote(IConsole::IResult *pResult, void *pUserData)
 		if(!pVoteOptionFirst)
 			pVoteOptionFirst = pDst;
 
-		str_copy(pDst->m_aDescription, pSrc->m_aDescription, sizeof(pDst->m_aDescription));
+		str_copy(pDst->m_aDescription, pSrc->m_aDescription);
 		mem_copy(pDst->m_aCommand, pSrc->m_aCommand, Len + 1);
 	}
 
 	// clean up
-	delete pSelf->m_pVoteOptionHeap;
-	pSelf->m_pVoteOptionHeap = pVoteOptionHeap;
-	pSelf->m_pVoteOptionFirst = pVoteOptionFirst;
-	pSelf->m_pVoteOptionLast = pVoteOptionLast;
-	pSelf->m_NumVoteOptions = NumVoteOptions;
+	delete m_pVoteOptionHeap;
+	m_pVoteOptionHeap = pVoteOptionHeap;
+	m_pVoteOptionFirst = pVoteOptionFirst;
+	m_pVoteOptionLast = pVoteOptionLast;
+	m_NumVoteOptions = NumVoteOptions;
+}
+
+void CGameContext::ClearVotes()
+{
+	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "cleared votes");
+	CNetMsg_Sv_VoteClearOptions VoteClearOptionsMsg;
+	Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
+	m_pVoteOptionHeap->Reset();
+	m_pVoteOptionFirst = 0;
+	m_pVoteOptionLast = 0;
+	m_NumVoteOptions = 0;
+
+	// reset sending of vote options
+	for(auto &pPlayer : m_apPlayers)
+	{
+		if(pPlayer)
+			pPlayer->m_SendVoteIndex = 0;
+	}
 }
 
 void CGameContext::ConForceVote(IConsole::IResult *pResult, void *pUserData)
@@ -3254,21 +3351,7 @@ void CGameContext::ConForceVote(IConsole::IResult *pResult, void *pUserData)
 void CGameContext::ConClearVotes(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
-
-	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "cleared votes");
-	CNetMsg_Sv_VoteClearOptions VoteClearOptionsMsg;
-	pSelf->Server()->SendPackMsg(&VoteClearOptionsMsg, MSGFLAG_VITAL, -1);
-	pSelf->m_pVoteOptionHeap->Reset();
-	pSelf->m_pVoteOptionFirst = 0;
-	pSelf->m_pVoteOptionLast = 0;
-	pSelf->m_NumVoteOptions = 0;
-
-	// reset sending of vote options
-	for(auto &pPlayer : pSelf->m_apPlayers)
-	{
-		if(pPlayer)
-			pPlayer->m_SendVoteIndex = 0;
-	}
+	pSelf->ClearVotes();
 }
 
 struct CMapNameItem
@@ -3550,7 +3633,7 @@ void CGameContext::PrivateMessage(const char* pStr, int ClientId, bool TeamChat)
 				{
 					CheckDistance = true;
 					CheckDistancePos = m_apPlayers[ClientId]->GetCharacter()->m_Pos;
-					str_copy(aChatTitle, "near", sizeof(aChatTitle));
+					str_copy(aChatTitle, "near");
 				}
 			}
 #ifdef CONF_SQL
@@ -3560,109 +3643,109 @@ void CGameContext::PrivateMessage(const char* pStr, int ClientId, bool TeamChat)
 				{
 					CheckLevel = SQL_USERLEVEL_MOD;
 					CheckDistancePos = m_apPlayers[ClientId]->GetCharacter()->m_Pos;
-					str_copy(aChatTitle, "moderators", sizeof(aChatTitle));
+					str_copy(aChatTitle, "moderators");
 				}
 			}
 #endif
 			else if(str_comp(aNameFound, "!engineer") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Engineer;
-				str_copy(aChatTitle, "engineer", sizeof(aChatTitle));
+				str_copy(aChatTitle, "engineer");
 			}
 			else if(str_comp(aNameFound, "!soldier ") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Soldier;
-				str_copy(aChatTitle, "soldier", sizeof(aChatTitle));
+				str_copy(aChatTitle, "soldier");
 			}
 			else if(str_comp(aNameFound, "!scientist") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Scientist;
-				str_copy(aChatTitle, "scientist", sizeof(aChatTitle));
+				str_copy(aChatTitle, "scientist");
 			}
 			else if(str_comp(aNameFound, "!biologist") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Biologist;
-				str_copy(aChatTitle, "biologist", sizeof(aChatTitle));
+				str_copy(aChatTitle, "biologist");
 			}
 			else if(str_comp(aNameFound, "!looper") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Looper;
-				str_copy(aChatTitle, "looper", sizeof(aChatTitle));
+				str_copy(aChatTitle, "looper");
 			}
 			else if(str_comp(aNameFound, "!medic") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Medic;
-				str_copy(aChatTitle, "medic", sizeof(aChatTitle));
+				str_copy(aChatTitle, "medic");
 			}
 			else if(str_comp(aNameFound, "!hero") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Hero;
-				str_copy(aChatTitle, "hero", sizeof(aChatTitle));
+				str_copy(aChatTitle, "hero");
 			}
 			else if(str_comp(aNameFound, "!ninja") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Ninja;
-				str_copy(aChatTitle, "ninja", sizeof(aChatTitle));
+				str_copy(aChatTitle, "ninja");
 			}
 			else if(str_comp(aNameFound, "!mercenary") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Mercenary;
-				str_copy(aChatTitle, "mercenary", sizeof(aChatTitle));
+				str_copy(aChatTitle, "mercenary");
 			}
 			else if(str_comp(aNameFound, "!sniper") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Sniper;
-				str_copy(aChatTitle, "sniper", sizeof(aChatTitle));
+				str_copy(aChatTitle, "sniper");
 			}
 			else if(str_comp(aNameFound, "!smoker") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Smoker;
-				str_copy(aChatTitle, "smoker", sizeof(aChatTitle));
+				str_copy(aChatTitle, "smoker");
 			}
 			else if(str_comp(aNameFound, "!hunter") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Hunter;
-				str_copy(aChatTitle, "hunter", sizeof(aChatTitle));
+				str_copy(aChatTitle, "hunter");
 			}
 			else if(str_comp(aNameFound, "!bat") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Bat;
-				str_copy(aChatTitle, "bat", sizeof(aChatTitle));
+				str_copy(aChatTitle, "bat");
 			}
 			else if(str_comp(aNameFound, "!boomer") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Boomer;
-				str_copy(aChatTitle, "boomer", sizeof(aChatTitle));
+				str_copy(aChatTitle, "boomer");
 			}
 			else if(str_comp(aNameFound, "!spider") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Spider;
-				str_copy(aChatTitle, "spider", sizeof(aChatTitle));
+				str_copy(aChatTitle, "spider");
 			}
 			else if(str_comp(aNameFound, "!ghost") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Ghost;
-				str_copy(aChatTitle, "ghost", sizeof(aChatTitle));
+				str_copy(aChatTitle, "ghost");
 			}
 			else if(str_comp(aNameFound, "!ghoul") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Ghoul;
-				str_copy(aChatTitle, "ghoul", sizeof(aChatTitle));
+				str_copy(aChatTitle, "ghoul");
 			}
 			else if(str_comp(aNameFound, "!slug") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Slug;
-				str_copy(aChatTitle, "slug", sizeof(aChatTitle));
+				str_copy(aChatTitle, "slug");
 			}
 			else if(str_comp(aNameFound, "!undead") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Undead;
-				str_copy(aChatTitle, "undead", sizeof(aChatTitle));
+				str_copy(aChatTitle, "undead");
 			}
 			else if(str_comp(aNameFound, "!witch") == 0 && m_apPlayers[ClientId] && m_apPlayers[ClientId]->GetCharacter())
 			{
 				CheckClass = EPlayerClass::Witch;
-				str_copy(aChatTitle, "witch", sizeof(aChatTitle));
+				str_copy(aChatTitle, "witch");
 			}
 			else
 			{
@@ -3708,7 +3791,6 @@ void CGameContext::PrivateMessage(const char* pStr, int ClientId, bool TeamChat)
 	Msg.m_Team = (TeamChat ? 1 : 0);
 	Msg.m_ClientId = ClientId;
 	
-	int NumPlayerFound = 0;
 	for(int i=0; i<MAX_CLIENTS; i++)
 	{
 		if(m_apPlayers[i] && !CGameContext::m_ClientMuted[i][ClientId])
@@ -3767,8 +3849,6 @@ void CGameContext::PrivateMessage(const char* pStr, int ClientId, bool TeamChat)
 			Msg.m_pMessage = FinalMessage.buffer();
 	
 			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
-				
-			NumPlayerFound++;
 		}
 	}
 }
@@ -4427,13 +4507,13 @@ void CGameContext::ConLanguage(IConsole::IResult *pResult, void *pUserData)
 	if(pLanguageCode)
 	{
 		if(str_comp_nocase(pLanguageCode, "ua") == 0)
-			str_copy(aFinalLanguageCode, "uk", sizeof(aFinalLanguageCode));
+			str_copy(aFinalLanguageCode, "uk");
 		else
 		{
 			for(int i=0; i<pSelf->Server()->Localization()->m_pLanguages.size(); i++)
 			{
 				if(str_comp_nocase(pLanguageCode, pSelf->Server()->Localization()->m_pLanguages[i]->GetFilename()) == 0)
-					str_copy(aFinalLanguageCode, pLanguageCode, sizeof(aFinalLanguageCode));
+					str_copy(aFinalLanguageCode, pLanguageCode);
 			}
 		}
 	}
@@ -4572,6 +4652,7 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("set_team", "i[id] i[team-id] ?i[delay in minutes]", CFGFLAG_SERVER, ConSetTeam, this, "Set team of player to team");
 	Console()->Register("set_team_all", "i[team-id]", CFGFLAG_SERVER, ConSetTeamAll, this, "Set team of all players to team");
 
+	Console()->Register("insert_vote", "i[position] s[name] r[command]", CFGFLAG_SERVER, ConInsertVote, this, "Insert a voting option");
 	Console()->Register("add_vote", "s[name] r[command]", CFGFLAG_SERVER, ConAddVote, this, "Add a voting option");
 	Console()->Register("remove_vote", "r[name]", CFGFLAG_SERVER, ConRemoveVote, this, "remove a voting option");
 	Console()->Register("force_vote", "s[name] s[command] ?r[reason]", CFGFLAG_SERVER, ConForceVote, this, "Force a voting option");
@@ -4652,8 +4733,10 @@ void CGameContext::OnConsoleInit()
 	InitGeolocation();
 }
 
-void CGameContext::OnInit()
+void CGameContext::OnInit(const void *pPersistentData)
 {
+	const CPersistentData *pPersistent = (const CPersistentData *)pPersistentData;
+
 	m_pServer = Kernel()->RequestInterface<IServer>();
 	m_pConfig = Kernel()->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
@@ -4675,7 +4758,7 @@ void CGameContext::OnInit()
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		m_VoteLanguageTick[i] = 0;
-		str_copy(m_VoteLanguage[i], "en", sizeof(m_VoteLanguage[i]));				
+		str_copy(m_VoteLanguage[i], "en");
 	}
 
 	m_Layers.Init(Kernel());
@@ -4752,8 +4835,17 @@ void CGameContext::OnMapChange(char *pNewMapName, int MapNameSize)
 {
 }
 
-void CGameContext::OnShutdown()
+void CGameContext::OnShutdown(const void *pPersistentData)
 {
+	m_pController->OnShutdown();
+
+	CPersistentData *pPersistent = (CPersistentData *)pPersistentData;
+
+	if(pPersistent)
+	{
+		pPersistent->m_PrevGameUuid = m_GameUuid;
+	}
+
 	//reset votes.
 	EndVote();
 
@@ -4857,6 +4949,67 @@ void CGameContext::OnPreSnap() {}
 void CGameContext::OnPostSnap()
 {
 	m_Events.Clear();
+}
+
+void CGameContext::UpdatePlayerMaps()
+{
+	const auto DistCompare = [](std::pair<float, int> a, std::pair<float, int> b) -> bool {
+		return (a.first < b.first);
+	};
+
+	if(Server()->Tick() % g_Config.m_SvMapUpdateRate != 0)
+		return;
+
+	std::pair<float, int> Dist[MAX_CLIENTS];
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(!Server()->ClientIngame(i))
+			continue;
+		if(Server()->GetClientVersion(i) >= VERSION_DDNET_OLD)
+			continue;
+		int *pMap = Server()->GetIdMap(i);
+
+		// compute distances
+		for(int j = 0; j < MAX_CLIENTS; j++)
+		{
+			Dist[j].second = j;
+			if(j == i)
+				continue;
+			if(!Server()->ClientIngame(j) || !m_apPlayers[j])
+			{
+				Dist[j].first = 1e10;
+				continue;
+			}
+			CCharacter *pChr = m_apPlayers[j]->GetCharacter();
+			if(!pChr)
+			{
+				Dist[j].first = 1e9;
+				continue;
+			}
+			if(!pChr->CanSnapCharacter(i))
+				Dist[j].first = 1e8;
+			else
+				Dist[j].first = length_squared(m_apPlayers[i]->m_ViewPos - pChr->GetPos());
+		}
+
+		// always send the player themselves, even if all in same position
+		Dist[i].first = -1;
+
+		std::nth_element(&Dist[0], &Dist[VANILLA_MAX_CLIENTS - 1], &Dist[MAX_CLIENTS], DistCompare);
+
+		int Index = 1; // exclude self client id
+		for(int j = 0; j < VANILLA_MAX_CLIENTS - 1; j++)
+		{
+			pMap[j + 1] = -1; // also fill player with empty name to say chat msgs
+			if(Dist[j].second == i || Dist[j].first > 5e9f)
+				continue;
+			pMap[Index++] = Dist[j].second;
+		}
+
+		// sort by real client ids, guarantee order on distance changes, O(Nlog(N)) worst case
+		// sort just clients in game always except first (self client id) and last (fake client id) indexes
+		std::sort(&pMap[1], &pMap[minimum(Index, VANILLA_MAX_CLIENTS - 1)]);
+	}
 }
 
 bool CGameContext::IsClientReady(int ClientId) const

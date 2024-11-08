@@ -3,6 +3,8 @@
 #ifndef GAME_MAPITEMS_H
 #define GAME_MAPITEMS_H
 
+#include <cstdint>
+
 // layer types
 enum
 {
@@ -221,11 +223,18 @@ enum
 	ZONE_BONUS_BONUS=1,
 };
 
+enum class EZonePhysics : int8_t
+{
+	Null,
+	Solid = TILE_SOLID,
+	NoHook = TILE_NOHOOK,
+};
+
 enum class EZoneTele
 {
 	Null,
 	NoWitch,
-	NoScientist,
+	NoTeleport,
 };
 
 struct CPoint

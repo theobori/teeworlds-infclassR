@@ -99,6 +99,12 @@ void CCharacter::SetWeapon(int W)
 		SetActiveWeapon(0);
 }
 
+void CCharacter::SetSolo(bool Solo)
+{
+	m_Core.m_Solo = Solo;
+	Teams()->m_Core.SetSolo(m_pPlayer->GetCid(), Solo);
+}
+
 bool CCharacter::IsGrounded() const
 {
 	if(Collision()->CheckPoint(GetPos().x + m_ProximityRadius / 2, GetPos().y + m_ProximityRadius / 2 + 5))
@@ -249,7 +255,7 @@ void CCharacter::NoAmmo()
 	}
 }
 
-void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
+void CCharacter::OnPredictedInput(const CNetObj_PlayerInput *pNewInput)
 {
 	// check for changes
 	if(mem_comp(&m_Input, pNewInput, sizeof(CNetObj_PlayerInput)) != 0)
@@ -257,23 +263,23 @@ void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 
 	// copy new input
 	mem_copy(&m_Input, pNewInput, sizeof(m_Input));
-	m_NumInputs++;
 
 	// it is not allowed to aim in the center
 	if(m_Input.m_TargetX == 0 && m_Input.m_TargetY == 0)
 		m_Input.m_TargetY = -1;
 }
 
-void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
+void CCharacter::OnDirectInput(const CNetObj_PlayerInput *pNewInput)
 {
 	mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
 	mem_copy(&m_LatestInput, pNewInput, sizeof(m_LatestInput));
+	m_NumInputs++;
 
 	// it is not allowed to aim in the center
 	if(m_LatestInput.m_TargetX == 0 && m_LatestInput.m_TargetY == 0)
 		m_LatestInput.m_TargetY = -1;
 
-	if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS)
+	if(m_NumInputs > 1 && m_pPlayer->GetTeam() != TEAM_SPECTATORS)
 	{
 		HandleWeaponSwitch();
 		FireWeapon();

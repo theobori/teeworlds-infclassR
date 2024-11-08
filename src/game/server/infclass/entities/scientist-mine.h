@@ -19,16 +19,19 @@ public:
 	static int EntityId;
 
 	CScientistMine(CGameContext *pGameContext, vec2 Pos, int Owner);
-	virtual ~CScientistMine();
+	~CScientistMine() override;
 
-	virtual void Snap(int SnappingClient);
-	virtual void TickPaused();
-	virtual void Tick();
+	void SetExplosionRadius(int Tiles);
 
-	void Explode(int DetonatedBy);
+	void Snap(int SnappingClient) override;
+	void TickPaused() override;
+	void Tick() override;
+
+	void Explode(int DetonatedBy, vec2 Direction);
 
 private:
 	int m_Ids[NUM_IDS];
+	int m_ExplosionRadius{};
 	
 public:
 	int m_StartTick;

@@ -34,6 +34,7 @@ int main(int argc, const char **argv)
 	pKernel->RegisterInterface(pStorage);
 	pKernel->RegisterInterface(static_cast<IEngineMap*>(pMap)); // register as both
 	pKernel->RegisterInterface(static_cast<IMap*>(pMap), false);
+	pKernel->RegisterInterface(pConsole);
 
 	const char *pSourceFileName = argv[1];
 

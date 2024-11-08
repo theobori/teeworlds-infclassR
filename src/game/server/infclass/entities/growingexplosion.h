@@ -14,12 +14,12 @@
 enum class EDamageType;
 enum class TAKEDAMAGEMODE;
 
-enum class GROWING_EXPLOSION_EFFECT
+enum class EGrowingExplosionEffect
 {
 	INVALID,
 	FREEZE_INFECTED,
 	POISON_INFECTED,
-	ELECTRIC_INFECTED,
+	ELECTRIFY_INFECTED,
 	LOVE_INFECTED,
 	BOOM_INFECTED,
 	HEAL_HUMANS,
@@ -28,7 +28,7 @@ enum class GROWING_EXPLOSION_EFFECT
 class CGrowingExplosion : public CInfCEntity
 {
 public:
-	CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, GROWING_EXPLOSION_EFFECT ExplosionEffect);
+	CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, EGrowingExplosionEffect ExplosionEffect);
 	CGrowingExplosion(CGameContext *pGameContext, vec2 Pos, vec2 Dir, int Owner, int Radius, EDamageType DamageType);
 
 	void Tick() override;
@@ -56,9 +56,9 @@ private:
 	int m_StartTick;
 	std::vector<int> m_pGrowingMap;
 	std::vector<vec2> m_pGrowingMapVec;
-	GROWING_EXPLOSION_EFFECT m_ExplosionEffect = GROWING_EXPLOSION_EFFECT::INVALID;
+	EGrowingExplosionEffect m_ExplosionEffect = EGrowingExplosionEffect::INVALID;
 	bool m_Hit[MAX_CLIENTS];
-	int m_Damage = -1;
+	std::optional<int> m_Damage;
 };
 
 #endif // GAME_SERVER_ENTITIES_GROWINGEXPLOSION_H

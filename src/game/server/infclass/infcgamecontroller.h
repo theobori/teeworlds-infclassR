@@ -4,12 +4,14 @@
 #define GAME_SERVER_INFCLASS_GAMECONTROLLER_H
 
 #include <game/infclass/classes.h>
+#include <game/infclass/weapons.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/teams.h>
 
 #include <base/tl/ic_array.h>
 #include <engine/console.h>
 
+class CDoor;
 class CGameWorld;
 class CHintMessage;
 class CInfClassCharacter;
@@ -22,8 +24,13 @@ struct ZoneData;
 enum class TAKEDAMAGEMODE;
 enum class EDamageType;
 enum class ROUND_CANCELATION_REASON;
-enum class ROUND_END_REASON;
 enum class EPlayerScoreMode;
+
+enum class ROUND_END_REASON
+{
+	FINISHED,
+	CANCELED,
+};
 
 static const int MaxWaves = 20;
 
@@ -46,6 +53,13 @@ enum class CLASS_AVAILABILITY
 	DISABLED,
 	NEED_MORE_PLAYERS,
 	LIMIT_EXCEEDED,
+};
+
+enum class EFinalExplosionState
+{
+	NotStarted,
+	Started,
+	Finished,
 };
 
 struct FunRoundConfiguration
@@ -118,6 +132,17 @@ public:
 	EPlayerClass ChooseHumanClass(const CInfClassPlayer *pPlayer) const;
 	EPlayerClass ChooseInfectedClass(const CInfClassPlayer *pPlayer) const;
 
+	int GetFireDelay(EInfclassWeapon WID) const;
+	void SetFireDelay(EInfclassWeapon WID, int Time);
+
+	int GetAmmoRegenTime(EInfclassWeapon WID) const;
+	void SetAmmoRegenTime(EInfclassWeapon WID, int Time);
+
+	int GetMaxAmmo(EInfclassWeapon WID) const;
+	void SetMaxAmmo(EInfclassWeapon WID, int n);
+
+	void InitWeapons();
+
 	bool GetPlayerClassEnabled(EPlayerClass PlayerClass) const;
 	bool SetPlayerClassEnabled(EPlayerClass PlayerClass, bool Enabled);
 	bool SetPlayerClassProbability(EPlayerClass PlayerClass, int Probability);
@@ -128,6 +153,10 @@ public:
 
 	int GetInfectedCount(EPlayerClass InfectedPlayerClass = EPlayerClass::Invalid) const;
 	int GetMinPlayers() const;
+	void SetRoundMinimumPlayers(int Number);
+
+	bool IsWinCheckEnabled() const;
+	void SetWinCheckEnabled(bool Enabled);
 
 	ERoundType GetDefaultRoundType() const;
 	ERoundType GetRoundType() const;
@@ -145,6 +174,7 @@ public:
 	void OnReset() override;
 
 	void DoPlayerInfection(CInfClassPlayer *pPlayer, CInfClassPlayer *pInfectiousPlayer, EPlayerClass PreviousClass);
+	void MaybeDropPickup(CInfClassCharacter *pVictim);
 
 	void OnHeroFlagCollected(int ClientId);
 	float GetHeroFlagCooldown() const;
@@ -154,6 +184,7 @@ public:
 	void OnTeamChangeRequested(int ClientId, int Team) override;
 	bool CanJoinTeam(int Team, int ClientId) override;
 	bool AreTurretsEnabled() const;
+	int InfTurretDuration() const;
 	bool MercBombsEnabled() const;
 	bool WhiteHoleEnabled() const;
 	float GetWhiteHoleLifeSpan() const;
@@ -164,7 +195,12 @@ public:
 	EPlayerScoreMode GetPlayerScoreMode(int SnappingClient) const;
 
 	float GetTimeLimitMinutes() const;
-	float GetInfectionDelay() const;
+
+	int GetTimeLimitSeconds() const;
+	void SetTimeLimitSeconds(float Seconds);
+
+	int GetInfectionDelay() const;
+	void SetInfectionDelay(int Seconds);
 
 	bool IsSpawnable(vec2 Pos, EZoneTele TeleZoneIndex);
 
@@ -180,11 +216,15 @@ public:
 	void StartSurvivalRound();
 	void EndSurvivalRound();
 
+	void EnsureFinalExplosionIsStarted();
+	void StartFinalExplosion();
+	void ProgressFinalExplosion();
 	void ResetFinalExplosion();
 	void SaveRoundRules();
 	void StartSurvivalGame();
 	void EndSurvivalGame();
 
+	int GetRoundStartTick() const { return m_RoundStartTick; }
 	int GetRoundTick() const;
 	int GetInfectionTick() const;
 	int GetInfectionStartTick() const;
@@ -206,6 +246,10 @@ public:
 
 	void RegisterChatCommands(class IConsole *pConsole) override;
 
+	static void ConSetWeaponFireDelay(class IConsole::IResult *pResult, void *pUserData);
+	static void ConSetWeaponAmmoRegen(class IConsole::IResult *pResult, void *pUserData);
+	static void ConSetWeaponMaxAmmo(class IConsole::IResult *pResult, void *pUserData);
+
 	static void ConSetClientName(IConsole::IResult *pResult, void *pUserData);
 	static void ConRestoreClientName(IConsole::IResult *pResult, void *pUserData);
 	static void ConLockClientName(IConsole::IResult *pResult, void *pUserData);
@@ -223,6 +267,7 @@ public:
 	static FunRoundConfiguration ParseFunRoundConfigArguments(IConsole::IResult *pResult);
 
 	static void ConQueueSpecialRound(IConsole::IResult *pResult, void *pUserData);
+	void ConQueueRound(const char *pRoundTypeName);
 	static void ConStartRound(IConsole::IResult *pResult, void *pUserData);
 	static void ConStartFunRound(IConsole::IResult *pResult, void *pUserData);
 	static void ConQueueFunRound(IConsole::IResult *pResult, void *pUserData);
@@ -260,6 +305,8 @@ public:
 	static void ChatWitch(IConsole::IResult *pResult, void *pUserData);
 	void ChatWitch(IConsole::IResult *pResult);
 
+	CDoor *AddDoor(const vec2 &From, const vec2 &To);
+
 	using IGameController::GameServer;
 	CGameWorld *GameWorld();
 	IConsole *Console() const;
@@ -271,6 +318,8 @@ public:
 	void SortCharactersByDistance(const ClientsArray &Input, ClientsArray *pOutput, const vec2 &Center, const float MaxDistance = 0);
 	void GetSortedTargetsInRange(const vec2 &Center, const float Radius, const ClientsArray &SkipList, ClientsArray *pOutput);
 	int GetMinimumInfected() const;
+	void SetRoundMinimumInfected(int Number);
+	void ResetRoundMinimumInfected();
 	int InfectedBonusArmor() const;
 
 	void SendKillMessage(int Victim, const DeathContext &Context);
@@ -291,7 +340,6 @@ protected:
 	void CancelTheRound(ROUND_CANCELATION_REASON Reason);
 	void AnnounceTheWinner(int NumHumans);
 	void BroadcastInfectionComing(int InfectionTick);
-	void MaybeDropPickup(const CInfClassCharacter *pVictim);
 
 private:
 	void UpdateNinjaTargets();
@@ -348,10 +396,15 @@ private:
 	int m_MapWidth;
 	int m_MapHeight;
 	int* m_GrowingMap;
-	bool m_ExplosionStarted;
+	EFinalExplosionState m_FinalExplosionState{};
 
 	CGameTeams m_Teams;
 
+	std::optional<bool> m_WinCheckEnabled;
+	std::optional<int> m_RoundMinimumPlayers;
+	std::optional<int> m_RoundMinimumInfected;
+	std::optional<float> m_RoundTimeLimitSeconds;
+	std::optional<int> m_RoundInfectionDelaySeconds;
 	int m_InfUnbalancedTick;
 	float m_InfBalanceBoostFactor = 0;
 	array<vec2> m_HeroFlagPositions;
@@ -372,6 +425,9 @@ private:
 	bool m_SuggestMoreRounds = false;
 	bool m_MoreRoundsSuggested = false;
 
+	int m_InfAmmoRegenTime[NB_INFWEAPON]{};
+	int m_InfFireDelay[NB_INFWEAPON]{};
+	int m_InfMaxAmmo[NB_INFWEAPON]{};
 	static int64_t m_LastTipTime;
 };
 

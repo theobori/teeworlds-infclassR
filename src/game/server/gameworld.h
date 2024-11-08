@@ -28,10 +28,8 @@ public:
 		ENTTYPE_ENGINEER_WALL,
 		ENTTYPE_SOLDIER_BOMB,
 		ENTTYPE_SCIENTIST_MINE,
-		ENTTYPE_SCIENTIST_LASER,
 		ENTTYPE_MERCENARY_BOMB,
 		ENTTYPE_SCATTER_GRENADE,
-		ENTTYPE_MEDIC_GRENADE,
 		ENTTYPE_HERO_FLAG,
 		ENTTYPE_BIOLOGIST_MINE,
 		ENTTYPE_SLUG_SLIME,
@@ -42,6 +40,8 @@ public:
 		ENTTYPE_LASER_TELEPORT,
 		ENTTYPE_TURRET,
 		ENTTYPE_PLASMA,
+
+		ENTTYPE_DOOR,
 		
 		NUM_ENTTYPES
 	};
@@ -56,8 +56,6 @@ private:
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
-
-	void UpdatePlayerMaps();
 
 public:
 	class CGameContext *GameServer() { return m_pGameServer; }
@@ -131,7 +129,7 @@ public:
 	using EntityFilter = bool (*)(const CEntity *);
 	class CEntity *IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 *NewPos, int EntityType, EntityFilter FilterFunction);
 
-	class CCharacter *IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, EntityFilter FilterFunction = nullptr, int CollideWith = -1, bool InfectedOnly = true);
+	class CCharacter *IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, EntityFilter FilterFunction, int CollideWith, bool InfectedOnly = true);
 	CEntity *IntersectEntity(vec2 Pos0, vec2 Pos1, float Radius, vec2 *NewPos, int EntityType);
 	CEntity *GetClosestEntity(const vec2 From, CEntity *pEntity1, CEntity *pEntity2);
 	CEntity *GetClosestEntity(const vec2 From, CEntity *pEntity1, CEntity *pEntity2, CEntity *pEntity3);
@@ -197,6 +195,12 @@ public:
 	void Tick();
 
 	void ReleaseHooked(int ClientId);
+
+	int GameTick() const { return m_GameTick; }
+	void SetGameTick(int Tick);
+
+private:
+	int m_GameTick{};
 };
 
 #endif

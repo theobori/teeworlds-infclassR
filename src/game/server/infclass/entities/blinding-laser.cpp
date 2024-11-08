@@ -8,6 +8,15 @@
 
 #include "infccharacter.h"
 
+void CBlindingLaser::OnFired(CInfClassCharacter *pCharacter, WeaponFireContext *pFireContext)
+{
+	if(pFireContext->NoAmmo)
+		return;
+
+	new CBlindingLaser(pCharacter->GameContext(), pCharacter->GetPos(), pCharacter->GetDirection(), pCharacter->GetCid());
+	pCharacter->GameServer()->CreateSound(pCharacter->GetPos(), SOUND_LASER_FIRE);
+}
+
 CBlindingLaser::CBlindingLaser(CGameContext *pGameContext, vec2 Pos, vec2 Direction, int Owner)
 	: CInfClassLaser(pGameContext, Pos, Direction, 600, Owner, 0, CGameWorld::ENTTYPE_LASER)
 {
@@ -18,7 +27,7 @@ CBlindingLaser::CBlindingLaser(CGameContext *pGameContext, vec2 Pos, vec2 Direct
 
 bool CBlindingLaser::OnCharacterHit(CInfClassCharacter *pHit)
 {
-	pHit->MakeBlind(GetOwner(), Config()->m_InfBlindnessDuration);
+	pHit->MakeBlind(Config()->m_InfBlindnessDuration, GetOwner());
 	return true;
 }
 

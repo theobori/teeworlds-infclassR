@@ -166,38 +166,9 @@ bool CInfClassInfected::SetupSkin(const CSkinContext &Context, CWeakSkinInfo *pO
 	return true;
 }
 
-int CInfClassInfected::GetDefaultEmote() const
+void CInfClassInfected::ResetNormalEmote()
 {
-	int EmoteNormal = m_NormalEmote;
-
-	if(!m_pCharacter)
-		return EmoteNormal;
-
-	if(m_pCharacter->IsBlind())
-		EmoteNormal = EMOTE_BLINK;
-
-	if(m_pCharacter->IsInvisible())
-		EmoteNormal = EMOTE_BLINK;
-
-	if(m_pCharacter->IsInLove())
-		EmoteNormal = EMOTE_HAPPY;
-
-	if(m_pCharacter->IsInSlowMotion() || m_pCharacter->HasHallucination())
-		EmoteNormal = EMOTE_SURPRISE;
-
-	if(m_pCharacter->IsFrozen())
-	{
-		if(m_pCharacter->GetFreezeReason() == FREEZEREASON_UNDEAD)
-		{
-			EmoteNormal = EMOTE_PAIN;
-		}
-		else
-		{
-			EmoteNormal = EMOTE_BLINK;
-		}
-	}
-
-	return EmoteNormal;
+	SetNormalEmote(EMOTE_ANGRY);
 }
 
 int CInfClassInfected::GetJumps() const
@@ -286,7 +257,7 @@ void CInfClassInfected::OnCharacterTick()
 
 		// Display time left to live
 		int Time = m_VoodooTimeAlive/Server()->TickSpeed();
-		GameServer()->SendBroadcast_Localization(GetCid(), BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+		GameServer()->SendBroadcast_Localization(GetCid(), EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
 			_C("Voodoo", "Staying alive for: {int:RemainingTime}"),
 			"RemainingTime", &Time,
 			NULL
@@ -464,6 +435,16 @@ void CInfClassInfected::OnHookAttachedPlayer()
 	m_LastSeenTick = Server()->Tick();
 }
 
+void CInfClassInfected::OnWeaponFired(WeaponFireContext *pFireContext)
+{
+	CInfClassPlayerClass::OnWeaponFired(pFireContext);
+
+	if(!m_pCharacter->IsSolo())
+	{
+		ResetInvisibility();
+	}
+}
+
 void CInfClassInfected::OnCharacterDamage(SDamageContext *pContext)
 {
 	m_LastSeenTick = Server()->Tick();
@@ -534,12 +515,6 @@ void CInfClassInfected::OnHammerFired(WeaponFireContext *pFireContext)
 		const vec2 ProjStartPos = GetPos() + Direction * GetHammerProjOffset();
 
 		ShowAttackAnimation = true;
-
-		if(GetPlayerClass() == EPlayerClass::Ghost)
-		{
-			m_pCharacter->MakeVisible();
-			m_LastSeenTick = Server()->Tick();
-		}
 
 		// Lookup for humans
 		ClientsArray Targets;
@@ -631,7 +606,7 @@ void CInfClassInfected::OnHammerFired(WeaponFireContext *pFireContext)
 	// if we Hit anything, we have to wait for the reload
 	if(Hits)
 	{
-		m_pCharacter->SetReloadDuration(0.33f);
+		pFireContext->ReloadInterval = 0.33f;
 	}
 	else if(GetPlayerClass() == EPlayerClass::Slug)
 	{
@@ -653,8 +628,13 @@ void CInfClassInfected::GiveClassAttributes()
 		return;
 	}
 
-	m_pCharacter->GiveWeapon(WEAPON_HAMMER, -1);
-	m_pCharacter->SetActiveWeapon(WEAPON_HAMMER);
+	switch(GetPlayerClass())
+	{
+	default:
+		m_pCharacter->GiveWeapon(WEAPON_HAMMER, -1);
+		m_pCharacter->SetActiveWeapon(WEAPON_HAMMER);
+		break;
+	}
 
 	m_VoodooAboutToDie = false;
 	m_VoodooTimeAlive = Server()->TickSpeed()*Config()->m_InfVoodooAliveTime;
@@ -666,7 +646,7 @@ void CInfClassInfected::BroadcastWeaponState() const
 	{
 		if(m_pCharacter->m_HookMode > 0)
 		{
-			GameServer()->SendBroadcast_Localization(GetCid(), BROADCAST_PRIORITY_WEAPONSTATE,
+			GameServer()->SendBroadcast_Localization(GetCid(), EBroadcastPriority::WEAPONSTATE,
 				BROADCAST_DURATION_REALTIME, _C("Spider", "Web mode enabled"), NULL);
 		}
 	}
@@ -675,7 +655,7 @@ void CInfClassInfected::BroadcastWeaponState() const
 		if(m_pPlayer->GetGhoulLevel())
 		{
 			float FodderInStomach = GetGhoulPercent();
-			GameServer()->SendBroadcast_Localization(GetCid(), BROADCAST_PRIORITY_WEAPONSTATE,
+			GameServer()->SendBroadcast_Localization(GetCid(), EBroadcastPriority::WEAPONSTATE,
 				BROADCAST_DURATION_REALTIME,
 				_C("Ghoul", "Stomach filled by {percent:FodderInStomach}"),
 				"FodderInStomach", &FodderInStomach,
@@ -847,13 +827,14 @@ void CInfClassInfected::SetHookOnLimit(bool OnLimit)
 
 void CInfClassInfected::GhostPreCoreTick()
 {
-	if(Server()->Tick() < m_LastSeenTick + 3 * Server()->TickSpeed() || m_pCharacter->IsFrozen() || m_pCharacter->IsInSlowMotion())
+	constexpr float InvisibilityCooldown = 3.f;
+	if(Server()->Tick() < m_LastSeenTick + InvisibilityCooldown * Server()->TickSpeed() || m_pCharacter->IsFrozen() || m_pCharacter->IsInSlowMotion())
 	{
 		m_pCharacter->MakeVisible();
 	}
 	else
 	{
-		bool HumanFound = HasHumansNearby();
+		bool HumanFound = !m_pCharacter->HasGrantedInvisibility() && !m_pCharacter->IsSolo() && HasHumansNearby();
 		if(HumanFound)
 		{
 			m_pCharacter->MakeVisible();
@@ -874,7 +855,7 @@ void CInfClassInfected::SpiderPreCoreTick()
 	if(m_pCharacter->WebHookLength() > 48.0f && m_pCharacter->GetHookedPlayer() < 0)
 	{
 		// Find other players
-		for(CInfClassCharacter *p = (CInfClassCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER); p; p = (CInfClassCharacter *)p->TypeNext())
+		for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
 		{
 			if(p->IsInfected())
 				continue;
@@ -909,11 +890,20 @@ bool CInfClassInfected::HasDrainingHook() const
 
 bool CInfClassInfected::HasHumansNearby()
 {
+	constexpr int GHOST_RADIUS = 11;
+	constexpr int GHOST_SEARCHMAP_SIZE = (2 * GHOST_RADIUS + 1);
+
 	// Search nearest human
 	int cellGhostX = static_cast<int>(round(GetPos().x)) / 32;
 	int cellGhostY = static_cast<int>(round(GetPos().y)) / 32;
 
 	vec2 SeedPos = vec2(16.0f, 16.0f) + vec2(cellGhostX * 32.0, cellGhostY * 32.0);
+	uint8_t aGhostSearchMap[GHOST_SEARCHMAP_SIZE * GHOST_SEARCHMAP_SIZE];
+
+	constexpr uint8_t FlagVisitedBefore = 0x1;
+	constexpr uint8_t FlagHasHuman = 0x2;
+	constexpr uint8_t FlagVisited = 0x4;
+	constexpr uint8_t FlagHasSolid = 0x8;
 
 	for(int y = 0; y < GHOST_SEARCHMAP_SIZE; y++)
 	{
@@ -922,15 +912,15 @@ bool CInfClassInfected::HasHumansNearby()
 			vec2 Tile = SeedPos + vec2(32.0f * (x - GHOST_RADIUS), 32.0f * (y - GHOST_RADIUS));
 			if(GameServer()->Collision()->CheckPoint(Tile))
 			{
-				m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] = 0x8;
+				aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] = FlagHasSolid;
 			}
 			else
 			{
-				m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] = 0x0;
+				aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] = 0x0;
 			}
 		}
 	}
-	for(CCharacter *p = (CCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER); p; p = (CCharacter *)p->TypeNext())
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
 	{
 		if(p->IsInfected())
 			continue;
@@ -943,41 +933,47 @@ bool CInfClassInfected::HasHumansNearby()
 
 		if(cellX >= 0 && cellX < GHOST_SEARCHMAP_SIZE && cellY >= 0 && cellY < GHOST_SEARCHMAP_SIZE)
 		{
-			m_GhostSearchMap[cellY * GHOST_SEARCHMAP_SIZE + cellX] |= 0x2;
+			const int TileIndex = cellY * GHOST_SEARCHMAP_SIZE + cellX;
+			aGhostSearchMap[TileIndex] |= FlagHasHuman;
 		}
 	}
-	m_GhostSearchMap[GHOST_RADIUS * GHOST_SEARCHMAP_SIZE + GHOST_RADIUS] |= 0x1;
+	aGhostSearchMap[GHOST_RADIUS * GHOST_SEARCHMAP_SIZE + GHOST_RADIUS] |= FlagVisitedBefore;
 	for(int i = 0; i < GHOST_RADIUS; i++)
 	{
 		for(int y = 0; y < GHOST_SEARCHMAP_SIZE; y++)
 		{
 			for(int x = 0; x < GHOST_SEARCHMAP_SIZE; x++)
 			{
-				if(!((m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & 0x1) || (m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & 0x8)))
+				if((aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & FlagVisitedBefore) || (aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & FlagHasSolid))
 				{
-					if(
-						(
-							(x > 0 && (m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x - 1] & 0x1)) ||
-							(x < GHOST_SEARCHMAP_SIZE - 1 && (m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x + 1] & 0x1)) ||
-							(y > 0 && (m_GhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x] & 0x1)) ||
-							(y < GHOST_SEARCHMAP_SIZE - 1 && (m_GhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x] & 0x1))) ||
-						((random_prob(0.25f)) && ((x > 0 && y > 0 && (m_GhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x - 1] & 0x1)) ||
-													 (x > 0 && y < GHOST_SEARCHMAP_SIZE - 1 && (m_GhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x - 1] & 0x1)) ||
-													 (x < GHOST_SEARCHMAP_SIZE - 1 && y > 0 && (m_GhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x + 1] & 0x1)) ||
-													 (x < GHOST_SEARCHMAP_SIZE - 1 && y < GHOST_SEARCHMAP_SIZE - 1 && (m_GhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x + 1] & 0x1)))))
+					// Skip solid tiles and the tiles we've checked before
+					continue;
+				}
+
+				if(
+					// Check if we visited top, left, right, top, or bottom neighboring tiles
+					((x > 0 && (aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x - 1] & FlagVisitedBefore)) ||
+						(x < GHOST_SEARCHMAP_SIZE - 1 && (aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x + 1] & FlagVisitedBefore)) ||
+						(y > 0 && (aGhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x] & FlagVisitedBefore)) ||
+						(y < GHOST_SEARCHMAP_SIZE - 1 && (aGhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x] & FlagVisitedBefore))) ||
+					((random_prob(0.25f))
+						// Check if we visited top/left, bottom/left, top/right, or bottom/right neighboring tiles
+						&& ((x > 0 && y > 0 && (aGhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x - 1] & FlagVisitedBefore)) ||
+							   (x > 0 && y < GHOST_SEARCHMAP_SIZE - 1 && (aGhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x - 1] & FlagVisitedBefore)) ||
+							   (x < GHOST_SEARCHMAP_SIZE - 1 && y > 0 && (aGhostSearchMap[(y - 1) * GHOST_SEARCHMAP_SIZE + x + 1] & FlagVisitedBefore)) ||
+							   (x < GHOST_SEARCHMAP_SIZE - 1 && y < GHOST_SEARCHMAP_SIZE - 1 && (aGhostSearchMap[(y + 1) * GHOST_SEARCHMAP_SIZE + x + 1] & FlagVisitedBefore)))))
+				{
+					aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] |= FlagVisited;
+					//~ if((Server()->Tick()%5 == 0) && i == (Server()->Tick()/5)%GHOST_RADIUS)
+					//~ {
+					//~ vec2 HintPos = vec2(
+					//~ 32.0f*(cellGhostX + (x - GHOST_RADIUS))+16.0f,
+					//~ 32.0f*(cellGhostY + (y - GHOST_RADIUS))+16.0f);
+					//~ GameServer()->CreateHammerHit(HintPos);
+					//~ }
+					if(aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & FlagHasHuman)
 					{
-						m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] |= 0x4;
-						//~ if((Server()->Tick()%5 == 0) && i == (Server()->Tick()/5)%GHOST_RADIUS)
-						//~ {
-						//~ vec2 HintPos = vec2(
-						//~ 32.0f*(cellGhostX + (x - GHOST_RADIUS))+16.0f,
-						//~ 32.0f*(cellGhostY + (y - GHOST_RADIUS))+16.0f);
-						//~ GameServer()->CreateHammerHit(HintPos);
-						//~ }
-						if(m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & 0x2)
-						{
-							return true;
-						}
+						return true;
 					}
 				}
 			}
@@ -986,15 +982,21 @@ bool CInfClassInfected::HasHumansNearby()
 		{
 			for(int x = 0; x < GHOST_SEARCHMAP_SIZE; x++)
 			{
-				if(m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & 0x4)
+				if(aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] & FlagVisited)
 				{
-					m_GhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] |= 0x1;
+					aGhostSearchMap[y * GHOST_SEARCHMAP_SIZE + x] |= FlagVisitedBefore;
 				}
 			}
 		}
 	}
 
 	return false;
+}
+
+void CInfClassInfected::ResetInvisibility()
+{
+	m_pCharacter->MakeVisible();
+	m_LastSeenTick = Server()->Tick();
 }
 
 void CInfClassInfected::OnSlimeEffect(int Owner, int Damage, float DamageInterval)

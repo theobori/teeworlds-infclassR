@@ -21,6 +21,8 @@ MACRO_CONFIG_STR(AboutContactsMatrix, about_contacts_matrix, 128, "https://infcl
 MACRO_CONFIG_STR(InfConverterId, inf_converter_id, 16, "v2", CFGFLAG_SERVER, "Map converter version id")
 MACRO_CONFIG_INT(InfConverterForceRegeneration, inf_converter_force_regeneration, 0, 0, 1, CFGFLAG_SERVER, "Always (re)generate client map (regardless of cache)")
 
+MACRO_CONFIG_STR(SvMapsBaseUrl, sv_maps_base_url, 128, "", CFGFLAG_SERVER, "Client maps base URL (HTTPS)")
+MACRO_CONFIG_INT(SvShowOpenDoors, sv_show_open_doors, 0, 0, 1, CFGFLAG_SERVER, "Show open doors (0 = no, 1 = yes)")
 MACRO_CONFIG_INT(SvTimelimitInSeconds, sv_timelimit_in_seconds, 0, 0, 10000, CFGFLAG_SERVER, "Time limit in seconds (0 means 'fallback to sv_timelimit')")
 MACRO_CONFIG_INT(SvMaxDDNetVersion, sv_max_ddnet_version, 0, 0, 9999999, CFGFLAG_SERVER, "Automatically kick clients with DDNet version higher than specified")
 
@@ -83,6 +85,7 @@ MACRO_CONFIG_FLOAT(InfSlimePoisonInterval, inf_slime_poison_interval, 1.5, 0.125
 MACRO_CONFIG_INT(InfSlimeHealRate, inf_slime_heal_rate, 2, 0, 10000, CFGFLAG_SERVER, "Slug-Slime heals infected for X hearts every second")
 MACRO_CONFIG_INT(InfSlimeMaxHeal, inf_slime_max_heal, 12, 0, 100, CFGFLAG_SERVER, "The maximum total HP that can be gained from Slug Slime (reasonable max value is 20)")
 MACRO_CONFIG_INT(InfInfzoneHealRate, inf_infzone_heal_rate, 3, 0, 10000, CFGFLAG_SERVER, "Infection zone heals infected for X hearts every second")
+MACRO_CONFIG_FLOAT(InfSleeperTakeDamageRatio, inf_sleeper_take_damage_ratio, 1.0, 1, 4, CFGFLAG_SERVER, "The ratio of damage taken by a sleeping tee (1.0 to 4.0)")
 MACRO_CONFIG_INT(InfScientistTpSelfharm, inf_scientist_tp_selfharm, 0, 0, 10000, CFGFLAG_SERVER, "Self damage on each teleportation")
 MACRO_CONFIG_INT(InfBatAirjumpLimit, inf_bat_airjump_limit, 10000, 0, 10000, CFGFLAG_SERVER, "Max number of extra airjumps")
 MACRO_CONFIG_INT(InfBatDamage, inf_bat_damage, 3, 0, 10000, CFGFLAG_SERVER, "Damage taken by bat")

@@ -14,8 +14,8 @@
 
 MACRO_ALLOC_POOL_ID_IMPL(CInfClassPlayer, MAX_CLIENTS)
 
-CInfClassPlayer::CInfClassPlayer(CInfClassGameController *pGameController, int ClientId, int Team)
-	: CPlayer(pGameController->GameServer(), ClientId, Team)
+CInfClassPlayer::CInfClassPlayer(CInfClassGameController *pGameController, int UniqueClientId, int ClientId, int Team)
+	: CPlayer(pGameController->GameServer(), UniqueClientId, ClientId, Team)
 	, m_pGameController(pGameController)
 {
 	m_class = EPlayerClass::Invalid;
@@ -24,6 +24,7 @@ CInfClassPlayer::CInfClassPlayer(CInfClassGameController *pGameController, int C
 	m_InfectionTick = -1;
 	m_HookProtection = false;
 	m_HookProtectionAutomatic = true;
+	m_ShowOthers = SHOW_OTHERS_ONLY_TEAM;
 
 	SetClass(EPlayerClass::None);
 }
@@ -157,8 +158,16 @@ void CInfClassPlayer::Snap(int SnappingClient)
 
 	pDDNetPlayer->m_AuthLevel = 0; // Server()->GetAuthedState(id);
 	pDDNetPlayer->m_Flags = 0;
+	if(m_Afk)
+		pDDNetPlayer->m_Flags |= EXPLAYERFLAG_AFK;
 	if(m_FollowTargetTicks > 0)
 		pDDNetPlayer->m_Flags |= EXPLAYERFLAG_SPEC;
+
+	CInfClassCharacter *pCharacter = GetCharacter();
+	if(pCharacter && pCharacter->IsSleeping())
+	{
+		pDDNetPlayer->m_Flags |= EXPLAYERFLAG_AFK;
+	}
 
 	int InfClassVersion = Server()->GetClientInfclassVersion(SnappingClient);
 
@@ -785,10 +794,10 @@ void CInfClassPlayer::SendClassIntro()
 		const char *pTranslated = Server()->Localization()->Localize(GetLanguage(), pClassName);
 
 		if(IsHuman())
-			GameServer()->SendBroadcast_Localization(GetCid(), BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
+			GameServer()->SendBroadcast_Localization(GetCid(), EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
 				_("You are a human: {str:ClassName}"), "ClassName", pTranslated, NULL);
 		else
-			GameServer()->SendBroadcast_Localization(GetCid(), BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
+			GameServer()->SendBroadcast_Localization(GetCid(), EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE,
 				_("You are an infected: {str:ClassName}"), "ClassName", pTranslated, NULL);
 
 		int Index = static_cast<int>(Class);

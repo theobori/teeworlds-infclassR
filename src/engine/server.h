@@ -8,6 +8,7 @@
 
 #include <base/hash.h>
 #include <base/math.h>
+#include <base/system.h>
 
 #include "kernel.h"
 #include "message.h"
@@ -27,50 +28,6 @@ enum
 };
 
 /* INFECTION MODIFICATION START ***************************************/
-enum class INFWEAPON
-{
-	NONE,
-	HAMMER,
-	GUN,
-	SHOTGUN,
-	GRENADE,
-	LASER,
-	NINJA,
-
-	ENGINEER_LASER,
-
-	SNIPER_LASER,
-
-	SOLDIER_GRENADE,
-
-	SCIENTIST_GRENADE,
-	SCIENTIST_LASER,
-
-	MEDIC_GRENADE,
-	MEDIC_LASER,
-	MEDIC_SHOTGUN,
-
-	HERO_GRENADE,
-	HERO_LASER,
-	HERO_SHOTGUN,
-
-	BIOLOGIST_SHOTGUN,
-	BIOLOGIST_LASER,
-
-	LOOPER_LASER,
-	LOOPER_GRENADE,
-
-	NINJA_HAMMER,
-	NINJA_GRENADE,
-
-	MERCENARY_GUN,
-	MERCENARY_GRENADE,
-	MERCENARY_LASER,
-
-	BLINDING_LASER,
-};
-
-constexpr int NB_INFWEAPON = static_cast<int>(INFWEAPON::BLINDING_LASER) + 1;
 
 enum
 {
@@ -393,15 +350,6 @@ public:
 	virtual const char* GetClientLanguage(int ClientId) = 0;
 	virtual void SetClientLanguage(int ClientId, const char* pLanguage) = 0;
 
-	virtual int GetFireDelay(INFWEAPON WID) = 0;
-	virtual void SetFireDelay(INFWEAPON WID, int Time) = 0;
-
-	virtual int GetAmmoRegenTime(INFWEAPON WID) = 0;
-	virtual void SetAmmoRegenTime(INFWEAPON WID, int Time) = 0;
-
-	virtual int GetMaxAmmo(INFWEAPON WID) = 0;
-	virtual void SetMaxAmmo(INFWEAPON WID, int n) = 0;
-
 	virtual bool IsClientLogged(int ClientId) = 0;
 #ifdef CONF_SQL
 	virtual void Login(int ClientId, const char* pUsername, const char* pPassword) = 0;
@@ -452,10 +400,10 @@ class IGameServer : public IInterface
 	MACRO_INTERFACE("gameserver")
 protected:
 public:
-	virtual void OnInit() = 0;
+	virtual void OnInit(const void *pPersistentData) = 0;
 	virtual void OnConsoleInit() = 0;
 	virtual void OnMapChange(char *pNewMapName, int MapNameSize) = 0;
-	virtual void OnShutdown() = 0;
+	virtual void OnShutdown(const void *pPersistentData) = 0;
 
 	virtual void OnTick() = 0;
 	virtual void OnPreSnap() = 0;
@@ -490,6 +438,7 @@ public:
 	virtual bool IsClientReady(int ClientId) const = 0;
 	virtual bool IsClientPlayer(int ClientId) const = 0;
 
+	virtual int PersistentDataSize() const = 0;
 	virtual int PersistentClientDataSize() const = 0;
 
 	virtual CUuid GameUuid() const = 0;
@@ -498,9 +447,6 @@ public:
 	virtual const char *NetVersion() const = 0;
 
 /* INFECTION MODIFICATION START ***************************************/
-	virtual void ClearBroadcast(int To, int Priority) = 0;
-	virtual void SendBroadcast_Localization(int To, int Priority, int LifeSpan, const char* pText, ...) = 0;
-	virtual void SendBroadcast_Localization_P(int To, int Priority, int LifeSpan, int Number, const char* pText, ...) = 0;
 	virtual void SendChatTarget(int To, const char* pText) = 0;
 	virtual void SendChatTarget_Localization(int To, int Category, const char* pText, ...) = 0;
 	virtual void SendChatTarget_Localization_P(int To, int Category, int Number, const char* pText, ...) = 0;

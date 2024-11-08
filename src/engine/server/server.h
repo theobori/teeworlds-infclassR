@@ -22,6 +22,7 @@
 #include <game/voting.h>
 
 #include <list>
+#include <string>
 
 /* DDNET MODIFICATION START *******************************************/
 #include "base/logger.h"
@@ -101,6 +102,7 @@ class CServer : public IServer
 	class IConsole *m_pConsole;
 	class IStorage *m_pStorage;
 	class IRegister *m_pRegister;
+	IEngine *m_pEngine;
 
 #if defined(CONF_UPNP)
 	CUPnP m_UPnP;
@@ -121,6 +123,7 @@ public:
 	class IConsole *Console() { return m_pConsole; }
 	class IStorage *Storage() { return m_pStorage; }
 	class CDbConnectionPool *DbPool() { return m_pConnectionPool; }
+	IEngine *Engine() { return m_pEngine; }
 
 	enum
 	{
@@ -255,8 +258,8 @@ public:
 	int m_RconClientId;
 	int m_RconAuthLevel;
 	char m_aShutdownReason[128];
+	void *m_pPersistentData;
 
-	int64_t m_Lastheartbeat;
 	//static NETADDR4 master_server;
 
 	enum
@@ -279,6 +282,8 @@ public:
 	unsigned m_aCurrentMapCrc[NUM_MAP_TYPES];
 	unsigned char *m_apCurrentMapData[NUM_MAP_TYPES];
 	unsigned int m_aCurrentMapSize[NUM_MAP_TYPES];
+	std::string m_MapDownloadUrl[NUM_MAP_TYPES];
+	std::string m_ClientMapFileName[NUM_MAP_TYPES];
 
 	CDemoRecorder m_aDemoRecorder[NUM_RECORDERS];
 
@@ -445,10 +450,6 @@ public:
 	static void ConAddSqlServer(IConsole::IResult *pResult, void *pUserData);
 	static void ConDumpSqlServers(IConsole::IResult *pResult, void *pUserData);
 
-	static void ConSetWeaponFireDelay(class IConsole::IResult *pResult, void *pUserData);
-	static void ConSetWeaponAmmoRegen(class IConsole::IResult *pResult, void *pUserData);
-	static void ConSetWeaponMaxAmmo(class IConsole::IResult *pResult, void *pUserData);
-
 	void LogoutClient(int ClientId, const char *pReason);
 
 	void ConchainRconPasswordChangeGeneric(int Level, const char *pCurrent, IConsole::IResult *pResult);
@@ -510,15 +511,6 @@ public:
 	const char *GetClientLanguage(int ClientId) override;
 	void SetClientLanguage(int ClientId, const char *pLanguage) override;
 
-	int GetFireDelay(INFWEAPON WID) override;
-	void SetFireDelay(INFWEAPON WID, int Time) override;
-
-	int GetAmmoRegenTime(INFWEAPON WID) override;
-	void SetAmmoRegenTime(INFWEAPON WID, int Time) override;
-
-	int GetMaxAmmo(INFWEAPON WID) override;
-	void SetMaxAmmo(INFWEAPON WID, int n) override;
-
 	int GetClientNbRound(int ClientId) override;
 
 	bool IsClientLogged(int ClientId) override;
@@ -570,10 +562,6 @@ public:
 	int m_LastRegistrationRequestId = 0;
 
 	int m_TimeShiftUnit;
-
-	int m_InfAmmoRegenTime[NB_INFWEAPON];
-	int m_InfFireDelay[NB_INFWEAPON];
-	int m_InfMaxAmmo[NB_INFWEAPON];
 
 public:
 	void AddGameServerCmd(CGameServerCmd* pCmd);

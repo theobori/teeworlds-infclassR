@@ -13,7 +13,8 @@ MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
 IServer *CPlayer::Server() const { return m_pGameServer->Server(); }
 
-CPlayer::CPlayer(CGameContext *pGameServer, int ClientId, int Team)
+CPlayer::CPlayer(CGameContext *pGameServer, uint32_t UniqueClientId, int ClientId, int Team) :
+	m_UniqueClientId(UniqueClientId)
 {
 	m_pGameServer = pGameServer;
 	m_ClientId = ClientId;
@@ -48,6 +49,7 @@ void CPlayer::Reset()
 	// DDRace
 
 	m_LastCommandPos = 0;
+	m_LastPlaytime = 0;
 
 	m_LastVoteCall = 0;
 	m_LastVoteTry = 0;
@@ -174,6 +176,9 @@ void CPlayer::Tick()
 
 void CPlayer::PostTick()
 {
+	// update latency value
+	if(m_PlayerFlags & PLAYERFLAG_IN_MENU)
+		m_aCurLatency[m_ClientId] = GameServer()->m_apPlayers[m_ClientId]->m_Latency.m_Min;
 }
 
 void CPlayer::HandleTuningParams()
@@ -255,55 +260,40 @@ void CPlayer::OnDisconnect()
 	KillCharacter();
 }
 
-void CPlayer::OnPredictedInput(CNetObj_PlayerInput *NewInput)
+void CPlayer::OnPredictedInput(const CNetObj_PlayerInput *pNewInput)
 {
 	// skip the input if chat is active
-	if((m_PlayerFlags&PLAYERFLAG_CHATTING) && (NewInput->m_PlayerFlags&PLAYERFLAG_CHATTING))
+	if((m_PlayerFlags & PLAYERFLAG_CHATTING) && (pNewInput->m_PlayerFlags & PLAYERFLAG_CHATTING))
 		return;
 
 	if(m_pCharacter)
-		m_pCharacter->OnPredictedInput(NewInput);
+		m_pCharacter->OnPredictedInput(pNewInput);
 }
 
-void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
+void CPlayer::OnDirectInput(const CNetObj_PlayerInput *pNewInput)
 {
-	if(NewInput->m_PlayerFlags&PLAYERFLAG_CHATTING)
-	{
-		// skip the input if chat is active
-		if(m_PlayerFlags&PLAYERFLAG_CHATTING)
-			return;
+	Server()->SetClientFlags(m_ClientId, pNewInput->m_PlayerFlags);
 
-		// reset input
-		if(m_pCharacter)
-			m_pCharacter->ResetInput();
+	m_PlayerFlags = pNewInput->m_PlayerFlags;
 
-		m_PlayerFlags = NewInput->m_PlayerFlags;
- 		return;
-	}
-
-	m_PlayerFlags = NewInput->m_PlayerFlags;
-
-	if(m_pCharacter)
-		m_pCharacter->OnDirectInput(NewInput);
-
-	bool AcceptInput = Server()->Tick() > m_DieTick + Server()->TickSpeed() * 0.2f;
-	if(!m_pCharacter && m_Team != TEAM_SPECTATORS && AcceptInput && (NewInput->m_Fire&1))
-		Respawn();
+	// bool AcceptInput = Server()->Tick() > m_DieTick + Server()->TickSpeed() * 0.2f;
+	// if(!m_pCharacter && m_Team != TEAM_SPECTATORS && AcceptInput && (pNewInput->m_Fire&1))
+	// 	Respawn();
 
 	// check for activity
-	if(NewInput->m_Direction || m_LatestActivity.m_TargetX != NewInput->m_TargetX ||
-		m_LatestActivity.m_TargetY != NewInput->m_TargetY || NewInput->m_Jump ||
-		NewInput->m_Fire&1 || NewInput->m_Hook)
+	if(pNewInput->m_Direction || m_LatestActivity.m_TargetX != pNewInput->m_TargetX ||
+		m_LatestActivity.m_TargetY != pNewInput->m_TargetY || pNewInput->m_Jump ||
+		pNewInput->m_Fire&1 || pNewInput->m_Hook)
 	{
-		m_LatestActivity.m_TargetX = NewInput->m_TargetX;
-		m_LatestActivity.m_TargetY = NewInput->m_TargetY;
+		m_LatestActivity.m_TargetX = pNewInput->m_TargetX;
+		m_LatestActivity.m_TargetY = pNewInput->m_TargetY;
 		m_LastActionTick = Server()->Tick();
-		if (NewInput->m_Direction || NewInput->m_Jump || NewInput->m_Hook)
+		if (pNewInput->m_Direction || pNewInput->m_Jump || pNewInput->m_Hook)
 			m_LastActionMoveTick = Server()->Tick();
 	}
 }
 
-void CPlayer::OnPredictedEarlyInput(CNetObj_PlayerInput *pNewInput)
+void CPlayer::OnPredictedEarlyInput(const CNetObj_PlayerInput *pNewInput)
 {
 	m_PlayerFlags = pNewInput->m_PlayerFlags;
 
@@ -376,10 +366,25 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 				GameServer()->m_apPlayers[i]->m_SpectatorId = SPEC_FREEVIEW;
 		}
 	}
+
+	Server()->ExpireServerInfo();
 }
 
 void CPlayer::TryRespawn()
 {
+}
+
+void CPlayer::UpdatePlaytime()
+{
+	m_LastPlaytime = time_get();
+}
+
+void CPlayer::SetAfk(bool Afk)
+{
+	if(m_Afk != Afk)
+	{
+		m_Afk = Afk;
+	}
 }
 
 int CPlayer::GetDefaultEmote() const

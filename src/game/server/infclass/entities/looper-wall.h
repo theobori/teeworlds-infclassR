@@ -14,19 +14,13 @@ public:
 	CLooperWall(CGameContext *pGameContext, vec2 Pos, int Owner);
 	~CLooperWall() override;
 
-	void SetEndPosition(vec2 EndPosition);
-
 	void Tick() override;
-	void TickPaused() override;
 	void Snap(int SnappingClient) override;
-	int GetEndTick() const { return m_EndTick; }
 
 private:
 	void OnHitInfected(CInfClassCharacter *pCharacter);
 
 	void PrepareSnapData();
-
-	int m_EndTick{};
 
 	int m_Ids[2]{};
 	int m_EndPointIds[2]{};

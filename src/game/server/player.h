@@ -26,7 +26,7 @@ class CPlayer
 	MACRO_ALLOC_POOL_ID()
 
 public:
-	CPlayer(CGameContext *pGameServer, int ClientId, int Team);
+	CPlayer(CGameContext *pGameServer, uint32_t UniqueClientId, int ClientId, int Team);
 	virtual ~CPlayer();
 
 	void Reset();
@@ -36,6 +36,7 @@ public:
 	void SetTeam(int Team, bool DoChatMsg=true);
 	int GetTeam() const { return m_Team; };
 	int GetCid() const { return m_ClientId; };
+	uint32_t GetUniqueCid() const { return m_UniqueClientId; }
 	int GetClientVersion() const;
 	virtual bool IsBot() const { return false; }
 
@@ -46,9 +47,9 @@ public:
 	virtual void Snap(int SnappingClient);
 	virtual void SnapClientInfo(int SnappingClient, int SnappingClientMappedId);
 
-	void OnDirectInput(CNetObj_PlayerInput *NewInput);
-	void OnPredictedInput(CNetObj_PlayerInput *NewInput);
-	void OnPredictedEarlyInput(CNetObj_PlayerInput *pNewInput);
+	void OnDirectInput(const CNetObj_PlayerInput *pNewInput);
+	void OnPredictedInput(const CNetObj_PlayerInput *pNewInput);
+	void OnPredictedEarlyInput(const CNetObj_PlayerInput *pNewInput);
 	void OnDisconnect();
 
 	virtual void KillCharacter(int Weapon = WEAPON_GAME);
@@ -115,6 +116,7 @@ public:
 	} m_Latency;
 
 protected:
+	const uint32_t m_UniqueClientId;
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;
 
@@ -137,8 +139,6 @@ protected:
 	int m_DefEmote;
 	int m_OverrideEmote;
 	int m_OverrideEmoteReset;
-
-	int64_t m_LastEyeEmote;
 
 public:
 	enum
@@ -165,7 +165,12 @@ public:
 	vec2 m_ShowDistance;
 	bool m_SpecTeam;
 
+	void UpdatePlaytime();
+	void SetAfk(bool Afk);
 	bool IsAfk() const { return m_Afk; }
+
+	int64_t m_LastPlaytime;
+	int64_t m_LastEyeEmote;
 
 	virtual int GetDefaultEmote() const;
 	void OverrideDefaultEmote(int Emote, int Tick);

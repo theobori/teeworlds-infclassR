@@ -10,6 +10,7 @@
 #include "alloc.h"
 
 class CCollision;
+class IServer;
 
 /*
 	Class: Entity
@@ -44,7 +45,8 @@ public:
 	class CGameWorld *GameWorld() { return m_pGameWorld; }
 	class CConfig *Config() { return m_pGameWorld->Config(); }
 	class CGameContext *GameServer() { return m_pGameWorld->GameServer(); }
-	class IServer *Server() { return m_pGameWorld->Server(); }
+	const IServer *Server() const { return m_pGameWorld->Server(); }
+	IServer *Server() { return m_pGameWorld->Server(); }
 	CCollision *Collision() { return m_pCCollision; }
 	const CCollision *Collision() const { return m_pCCollision; }
 

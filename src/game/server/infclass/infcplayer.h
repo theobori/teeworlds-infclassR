@@ -41,7 +41,7 @@ class CInfClassPlayer : public CPlayer
 	MACRO_ALLOC_POOL_ID()
 
 public:
-	CInfClassPlayer(CInfClassGameController *pGameController, int ClientId, int Team);
+	CInfClassPlayer(CInfClassGameController *pGameController, int UniqueClientId, int ClientId, int Team);
 	~CInfClassPlayer() override;
 
 	static CInfClassPlayer *GetInstance(CPlayer *pPlayer);
@@ -134,6 +134,7 @@ public:
 	void ApplyMaxHP();
 
 	int GetKills() const { return m_Kills; }
+	int GetDeaths() const { return m_Deaths; }
 
 	virtual void OnCharacterHPChanged(){};
 

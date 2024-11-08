@@ -24,6 +24,7 @@ CLooperWall::CLooperWall(CGameContext *pGameContext, vec2 Pos1, int Owner) :
 	CPlacedObject(pGameContext, EntityId, Pos1, Owner)
 {
 	m_InfClassObjectType = INFCLASS_OBJECT_TYPE_LOOPER_WALL;
+	m_MaxLength = g_BarrierMaxLength;
 
 	for(int &Id : m_Ids)
 	{
@@ -57,29 +58,10 @@ CLooperWall::~CLooperWall()
 	}
 }
 
-void CLooperWall::SetEndPosition(vec2 EndPosition)
-{
-	if(distance(m_Pos, EndPosition) > g_BarrierMaxLength)
-	{
-		m_Pos2 = m_Pos + normalize(EndPosition - m_Pos) * g_BarrierMaxLength;
-	}
-	else
-	{
-		m_Pos2 = EndPosition;
-	}
-
-	m_InfClassObjectFlags = INFCLASS_OBJECT_FLAG_HAS_SECOND_POSITION;
-
-	int LifeSpan = Server()->TickSpeed() * Config()->m_InfLooperBarrierLifeSpan;
-	if(GameController()->GetRoundType() == ERoundType::Survival)
-	{
-		LifeSpan *= 0.5f;
-	}
-	m_EndTick = Server()->Tick() + LifeSpan;
-}
-
 void CLooperWall::Tick()
 {
+	CPlacedObject::Tick();
+
 	if(IsMarkedForDestroy())
 		return;
 
@@ -89,36 +71,24 @@ void CLooperWall::Tick()
 		return;
 	}
 
-	if(Server()->Tick() >= m_EndTick)
+	// Find other players
+	for(TEntityPtr<CInfClassCharacter> p = GameWorld()->FindFirst<CInfClassCharacter>(); p; ++p)
 	{
-		GameWorld()->DestroyEntity(this);
-	}
-	else
-	{
-		// Find other players
-		for(CInfClassCharacter *p = (CInfClassCharacter*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER); p; p = (CInfClassCharacter *)p->TypeNext())
+		if(p->IsHuman())
+			continue;
+
+		vec2 IntersectPos;
+		if(!closest_point_on_line(m_Pos, m_Pos2.value(), p->m_Pos, IntersectPos))
+			continue;
+
+		float Len = distance(p->m_Pos, IntersectPos);
+		if(Len < p->m_ProximityRadius + g_BarrierRadius)
 		{
-			if(p->IsHuman())
-				continue;
-
-			vec2 IntersectPos;
-			if(!closest_point_on_line(m_Pos, m_Pos2, p->m_Pos, IntersectPos))
-				continue;
-
-			float Len = distance(p->m_Pos, IntersectPos);
-			if(Len < p->m_ProximityRadius+g_BarrierRadius)
-			{
-				OnHitInfected(p);
-			}
+			OnHitInfected(p);
 		}
 	}
 
 	PrepareSnapData();
-}
-
-void CLooperWall::TickPaused()
-{
-	++m_EndTick;
 }
 
 void CLooperWall::Snap(int SnappingClient)
@@ -143,7 +113,7 @@ void CLooperWall::Snap(int SnappingClient)
 
 		if(HasSecondPosition())
 		{
-			pInfClassObject->m_EndTick = m_EndTick;
+			pInfClassObject->m_EndTick = m_EndTick.value_or(0);
 		}
 		else
 		{
@@ -171,7 +141,8 @@ void CLooperWall::Snap(int SnappingClient)
 	}
 
 	const bool AntiPing = pDestPlayer && pDestPlayer->GetAntiPingEnabled();
-	vec2 dirVec = vec2(m_Pos.x-m_Pos2.x, m_Pos.y-m_Pos2.y);
+	vec2 Pos2 = m_Pos2.value();
+	vec2 dirVec = vec2(m_Pos.x-Pos2.x, m_Pos.y-Pos2.y);
 	vec2 dirVecN = normalize(dirVec);
 	vec2 dirVecT = vec2(dirVecN.y * g_Thickness * 0.5f, -dirVecN.x * g_Thickness * 0.5f);
 
@@ -184,19 +155,19 @@ void CLooperWall::Snap(int SnappingClient)
 		}
 
 		// draws the first two dots + the lasers
-		GameServer()->SnapLaserObject(Context, m_Ids[i], m_Pos + dirVecT, m_Pos2 + dirVecT, m_SnapStartTick);
+		GameServer()->SnapLaserObject(Context, m_Ids[i], m_Pos + dirVecT, Pos2 + dirVecT, m_SnapStartTick);
 
 		// draws one dot at the end of each laser
 		if(!AntiPing)
 		{
-			GameServer()->SnapLaserObject(Context, m_EndPointIds[i], m_Pos2 + dirVecT, m_Pos2 + dirVecT, Server()->Tick());
+			GameServer()->SnapLaserObject(Context, m_EndPointIds[i], Pos2 + dirVecT, Pos2 + dirVecT, Server()->Tick());
 		}
 	}
 
 	// draw particles inside wall
 	if(!AntiPing)
 	{
-		vec2 startPos = vec2(m_Pos2.x+dirVecT.x, m_Pos2.y+dirVecT.y);
+		vec2 startPos = vec2(Pos2.x+dirVecT.x, Pos2.y+dirVecT.y);
 		dirVecT.x = -dirVecT.x*2.0f;
 		dirVecT.y = -dirVecT.y*2.0f;
 
@@ -234,19 +205,22 @@ void CLooperWall::OnHitInfected(CInfClassCharacter *pCharacter)
 		GameServer()->SendEmoticon(pCharacter->GetCid(), EMOTICON_EXCLAMATION);
 	}
 
-	int LifeSpanReducer = Server()->TickSpeed() * Reduction * AddedDuration / FullEffectDuration;
-
-	if(GameController()->GetRoundType() == ERoundType::Survival)
+	if(m_EndTick.has_value())
 	{
-		LifeSpanReducer = LifeSpanReducer / 3.0f;
-	}
+		int LifeSpanReducer = Server()->TickSpeed() * Reduction * AddedDuration / FullEffectDuration;
 
-	m_EndTick -= LifeSpanReducer;
+		if(GameController()->GetRoundType() == ERoundType::Survival)
+		{
+			LifeSpanReducer = LifeSpanReducer / 3.0f;
+		}
+
+		m_EndTick.value() -= LifeSpanReducer;
+	}
 }
 
 void CLooperWall::PrepareSnapData()
 {
-	const int RemainingTicks = m_EndTick - Server()->Tick();
+	const int RemainingTicks = m_EndTick.has_value() ? (m_EndTick.value() - Server()->Tick()) : 1000;
 
 	// Laser dieing animation
 	int LifeDiff = 0;

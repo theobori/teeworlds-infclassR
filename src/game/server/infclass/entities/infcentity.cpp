@@ -71,10 +71,26 @@ void CInfCEntity::Reset()
 
 void CInfCEntity::Tick()
 {
+	if(m_EndTick.has_value() && (Server()->Tick() >= m_EndTick))
+	{
+		GameWorld()->DestroyEntity(this);
+		return;
+	}
+
 	if(m_PosEnv >= 0)
 	{
 		SyncPosition();
 	}
+	else
+	{
+		m_Pos += m_Velocity;
+	}
+}
+
+void CInfCEntity::TickPaused()
+{
+	if (m_EndTick.has_value())
+		++m_EndTick.value();
 }
 
 void CInfCEntity::SetPos(const vec2 &Position)
@@ -87,6 +103,25 @@ void CInfCEntity::SetAnimatedPos(const vec2 &Pivot, const vec2 &RelPosition, int
 	m_Pivot = Pivot;
 	m_RelPosition = RelPosition;
 	m_PosEnv = PosEnv;
+}
+
+float CInfCEntity::GetLifespan() const
+{
+	if (!m_EndTick.has_value())
+		return -1;
+
+	int RemainingTicks = m_EndTick.value_or(0) - Server()->Tick();
+	return RemainingTicks <= 0 ? 0 : RemainingTicks / static_cast<float>(Server()->TickSpeed());
+}
+
+void CInfCEntity::SetLifespan(float Lifespan)
+{
+	m_EndTick = Server()->Tick() + Server()->TickSpeed() * Lifespan;
+}
+
+void CInfCEntity::ResetLifespan()
+{
+	m_EndTick.reset();
 }
 
 bool CInfCEntity::DoSnapForClient(int SnappingClient)

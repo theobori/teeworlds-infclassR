@@ -49,33 +49,18 @@
 #define BROADCAST_DURATION_REALTIME (0)
 #define BROADCAST_DURATION_GAMEANNOUNCE (Server()->TickSpeed()*2)
 
-enum
+enum class EBroadcastPriority
 {
-	BROADCAST_PRIORITY_LOWEST=0,
-	BROADCAST_PRIORITY_WEAPONSTATE,
-	BROADCAST_PRIORITY_EFFECTSTATE,
-	BROADCAST_PRIORITY_GAMEANNOUNCE,
-	BROADCAST_PRIORITY_SERVERANNOUNCE,
-	BROADCAST_PRIORITY_INTERFACE,
+	LOWEST,
+	WEAPONSTATE,
+	EFFECTSTATE,
+	GAMEANNOUNCE,
+	SERVERANNOUNCE,
+	INTERFACE,
 };
 
 class CConfig;
 class IEngine;
-
-struct CSnapContext
-{
-	CSnapContext(int Version, bool Sixup = false) :
-		m_ClientVersion(Version), m_Sixup(Sixup)
-	{
-	}
-
-	int GetClientVersion() const { return m_ClientVersion; }
-	bool IsSixup() const { return m_Sixup; }
-
-private:
-	int m_ClientVersion;
-	bool m_Sixup;
-};
 
 class CGameContext : public IGameServer
 {
@@ -107,6 +92,7 @@ class CGameContext : public IGameServer
 	static void ConSay(IConsole::IResult *pResult, void *pUserData);
 	static void ConSetTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConSetTeamAll(IConsole::IResult *pResult, void *pUserData);
+	static void ConInsertVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConAddVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConRemoveVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConForceVote(IConsole::IResult *pResult, void *pUserData);
@@ -119,10 +105,14 @@ class CGameContext : public IGameServer
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
 	void Destruct(int Resetting);
-	void AddVote(const char *pDescription, const char *pCommand);
 	static int MapScan(const char *pName, int IsDir, int DirType, void *pUserData);
 
 public:
+	struct CPersistentData
+	{
+		CUuid m_PrevGameUuid;
+	};
+
 	struct CPersistentClientData
 	{
 		bool m_IsSpectator;
@@ -162,6 +152,10 @@ public:
 	class CCharacter *GetPlayerChar(int ClientId);
 
 	// voting
+	void AddVote(const char *pDescription, const char *pCommand);
+	bool InsertVote(int Position, const char *pDescription, const char *pCommand);
+	void RemoveVote(const char *pVote);
+	void ClearVotes();
 	void StartVote(const char *pDesc, const char *pCommand, const char *pReason);
 	void EndVote();
 	void SendVoteSet(int ClientId);
@@ -233,15 +227,17 @@ public:
 	void ProgressVoteOptions(int ClientId);
 
 	// engine events
-	void OnInit() override;
+	void OnInit(const void *pPersistentData) override;
 	void OnConsoleInit() override;
 	void OnMapChange(char *pNewMapName, int MapNameSize) override;
-	void OnShutdown() override;
+	void OnShutdown(const void *pPersistentData) override;
 
 	void OnTick() override;
 	void OnPreSnap() override;
 	void OnSnap(int ClientId) override;
 	void OnPostSnap() override;
+
+	void UpdatePlayerMaps();
 
 	void *PreProcessMsg(int *pMsgId, CUnpacker *pUnpacker, int ClientId);
 	void CensorMessage(char *pCensoredMessage, const char *pMessage, int Size);
@@ -271,6 +267,7 @@ public:
 
 	bool IsClientReady(int ClientId) const override;
 	bool IsClientPlayer(int ClientId) const override;
+	int PersistentDataSize() const override { return sizeof(CPersistentData); }
 	int PersistentClientDataSize() const override;
 
 	CUuid GameUuid() const override;
@@ -361,10 +358,10 @@ private:
 	void GetMapNameFromCommand(char* pMapName, const char *pCommand);
 
 public:
-	virtual void SendBroadcast(int To, const char *pText, int Priority, int LifeSpan);
-	virtual void SendBroadcast_Localization(int To, int Priority, int LifeSpan, const char* pText, ...);
-	virtual void SendBroadcast_Localization_P(int To, int Priority, int LifeSpan, int Number, const char* pText, ...);
-	virtual void ClearBroadcast(int To, int Priority);
+	virtual void SendBroadcast(int To, const char *pText, EBroadcastPriority Priority, int LifeSpan);
+	virtual void SendBroadcast_Localization(int To, EBroadcastPriority Priority, int LifeSpan, const char* pText, ...);
+	virtual void SendBroadcast_Localization_P(int To, EBroadcastPriority Priority, int LifeSpan, int Number, const char* pText, ...);
+	virtual void ClearBroadcast(int To, EBroadcastPriority Priority);
 	
 	static const char *GetChatCategoryPrefix(int Category);
 	virtual void SendChatTarget_Localization(int To, int Category, const char* pText, ...);
@@ -378,10 +375,13 @@ public:
 	void CreateLoveEvent(vec2 Pos);
 	void SendHitSound(int ClientId);
 	void SendScoreSound(int ClientId);
-	void AddBroadcast(int ClientId, const char* pText, int Priority, int LifeSpan);
+	void AddBroadcast(int ClientId, const char* pText, EBroadcastPriority Priority, int LifeSpan);
 	void SetClientLanguage(int ClientId, const char *pLanguage);
 	void InitChangelog();
 	void ReloadChangelog();
+
+	bool IsPaused() const;
+	void SetPaused(bool Paused);
 
 	bool MapExists(const char *pMapName) const;
 	
@@ -399,11 +399,11 @@ private:
 		int m_NoChangeTick;
 		char m_PrevMessage[1024];
 		
-		int m_Priority;
+		EBroadcastPriority m_Priority;
 		char m_NextMessage[1024];
 		
 		int m_LifeSpanTick;
-		int m_TimedPriority;
+		EBroadcastPriority m_TimedPriority;
 		char m_TimedMessage[1024];
 	};
 

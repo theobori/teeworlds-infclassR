@@ -199,9 +199,13 @@ void CInfClassCharacter::Destroy()
 
 void CInfClassCharacter::TickBeforeWorld()
 {
+	const int CurrentTick = Server()->Tick();
+
 	m_Core.m_Infected = IsInfected();
 	m_Core.m_InLove = IsInLove();
 	m_Core.m_HookProtected = GetPlayer()->HookProtectionEnabled();
+
+	SetSolo(m_SoloUntilTick >= CurrentTick);
 }
 
 void CInfClassCharacter::Tick()
@@ -213,17 +217,25 @@ void CInfClassCharacter::Tick()
 		return;
 	}
 
-	const vec2 PrevPos = m_Core.m_Pos;
 	const int CurrentTick = Server()->Tick();
 	GameController()->HandleCharacterTiles(this);
 
 	CCharacter::Tick();
 
-	if(m_BlindnessTicks > 0)
+	if(m_SleepingTicks > 0)
+	{
+		--m_SleepingTicks;
+		int EffectSec = 1 + (m_SleepingTicks / Server()->TickSpeed());
+		GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE, BROADCAST_DURATION_REALTIME,
+			_("You are sleeping: {sec:EffectDuration}"),
+			"EffectDuration", &EffectSec,
+			nullptr);
+	}
+	else if(m_BlindnessTicks > 0)
 	{
 		--m_BlindnessTicks;
 		int EffectSec = 1 + (m_BlindnessTicks / Server()->TickSpeed());
-		GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), BROADCAST_PRIORITY_EFFECTSTATE, BROADCAST_DURATION_REALTIME,
+		GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE, BROADCAST_DURATION_REALTIME,
 			_("You are blinded: {sec:EffectDuration}"),
 			"EffectDuration", &EffectSec,
 			nullptr);
@@ -289,6 +301,11 @@ void CInfClassCharacter::TickDeferred()
 	{
 		m_pClass->OnCharacterTickDeferred();
 	}
+
+	if(!m_Core.m_AttachedPlayers.empty())
+	{
+		CancelSleeping();
+	}
 }
 
 void CInfClassCharacter::TickPaused()
@@ -337,6 +354,8 @@ void CInfClassCharacter::Snap(int SnappingClient)
 		return;
 
 	pDDNetCharacter->m_Flags = 0;
+	if(m_Core.m_Solo)
+		pDDNetCharacter->m_Flags |= CHARACTERFLAG_SOLO;
 
 	if(GetPlayerClass() == EPlayerClass::Mercenary)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_JETPACK;
@@ -399,7 +418,6 @@ void CInfClassCharacter::Snap(int SnappingClient)
 
 void CInfClassCharacter::SpecialSnapForClient(int SnappingClient, bool *pDoSnap)
 {
-	CInfClassPlayer *pDestClient = GameController()->GetPlayer(SnappingClient);
 	CInfClassCharacter *pDestCharacter = GameController()->GetCharacter(SnappingClient);
 	if((GetCid() != SnappingClient) && pDestCharacter && pDestCharacter->IsBlind())
 	{
@@ -407,7 +425,7 @@ void CInfClassCharacter::SpecialSnapForClient(int SnappingClient, bool *pDoSnap)
 		return;
 	}
 
-	if(IsInvisible() && !GameController()->CanSeeDetails(SnappingClient, GetCid()))
+	if((IsInvisible() || IsSolo()) && !GameController()->CanSeeDetails(SnappingClient, GetCid()))
 	{
 		*pDoSnap = false;
 		return;
@@ -502,8 +520,8 @@ void CInfClassCharacter::FireWeapon()
 	bool WillFire = false;
 	if(CountInput(m_LatestPrevInput.m_Fire, m_LatestInput.m_Fire).m_Presses)
 		WillFire = true;
-	else if(FullAuto && (m_LatestInput.m_Fire&1) && (m_aWeapons[m_ActiveWeapon].m_Ammo || (GetInfWeaponId(m_ActiveWeapon) == INFWEAPON::MERCENARY_GRENADE)
-																					   || (GetInfWeaponId(m_ActiveWeapon) == INFWEAPON::MEDIC_GRENADE)))
+	else if(FullAuto && (m_LatestInput.m_Fire&1) && (m_aWeapons[m_ActiveWeapon].m_Ammo || (GetInfWeaponId(m_ActiveWeapon) == EInfclassWeapon::POISON_GRENADE)
+																					   || (GetInfWeaponId(m_ActiveWeapon) == EInfclassWeapon::HEALING_GRENADE)))
 	{
 		WillFire = true;
 	}
@@ -522,7 +540,7 @@ void CInfClassCharacter::FireWeapon()
 		return;
 	}
 
-	const INFWEAPON InfWeaponId = GetInfWeaponId(m_ActiveWeapon);
+	const EInfclassWeapon InfWeaponId = GetInfWeaponId(m_ActiveWeapon);
 
 	WeaponFireContext FireContext;
 	FireContext.Weapon = m_ActiveWeapon;
@@ -530,11 +548,11 @@ void CInfClassCharacter::FireWeapon()
 	FireContext.AmmoConsumed = 1;
 	FireContext.AmmoAvailable = m_aWeapons[m_ActiveWeapon].m_Ammo;
 	FireContext.NoAmmo = FireContext.AmmoAvailable == 0;
-	FireContext.ReloadInterval = Server()->GetFireDelay(InfWeaponId) / 1000.0f;
+	FireContext.ReloadInterval = GameController()->GetFireDelay(InfWeaponId) / 1000.0f;
 
 	GetClass()->OnWeaponFired(&FireContext);
 
-	if(IsInLove() && FireContext.FireAccepted)
+	if(IsInLove() && FireContext.FireAccepted && !IsSolo())
 	{
 		GameServer()->CreateLoveEvent(GetPos());
 	}
@@ -569,6 +587,12 @@ bool CInfClassCharacter::TakeDamage(const vec2 &Force, float FloatDmg, int From,
 	float TakenPlaceholder{};
 	float &DamageLeft = pDamagePointsLeft ? *pDamagePointsLeft : TakenPlaceholder;
 	DamageLeft = 0;
+
+	if(IsSleeping())
+	{
+		FloatDmg *= Config()->m_InfSleeperTakeDamageRatio;
+		CancelSleeping();
+	}
 
 	SDamageContext DamageContext;
 	{
@@ -782,7 +806,7 @@ bool CInfClassCharacter::TakeDamage(const vec2 &Force, float FloatDmg, int From,
 	return true;
 }
 
-bool CInfClassCharacter::Heal(int HitPoints, int FromCid)
+bool CInfClassCharacter::Heal(int HitPoints, std::optional<int> FromCid)
 {
 	if(GetClass() && GetClass()->IsHealingDisabled())
 	{
@@ -798,17 +822,17 @@ bool CInfClassCharacter::Heal(int HitPoints, int FromCid)
 		int Sound = HadFullHealth ? SOUND_PICKUP_ARMOR : SOUND_PICKUP_HEALTH;
 		GameContext()->CreateSound(GetPos(), Sound, CmaskOne(GetCid()));
 
-		if(FromCid >= 0)
+		if(FromCid.has_value())
 		{
 			const float HealerHelperDuration = 20;
-			AddHelper(FromCid, HealerHelperDuration);
+			AddHelper(FromCid.value(), HealerHelperDuration);
 		}
 	}
 
 	return Healed;
 }
 
-bool CInfClassCharacter::GiveHealth(int HitPoints, int FromCid)
+bool CInfClassCharacter::GiveHealth(int HitPoints, std::optional<int> FromCid)
 {
 	if(GetClass() && GetClass()->IsHealingDisabled())
 	{
@@ -823,17 +847,17 @@ bool CInfClassCharacter::GiveHealth(int HitPoints, int FromCid)
 		int Sound = SOUND_PICKUP_HEALTH;
 		GameContext()->CreateSound(GetPos(), Sound, CmaskOne(GetCid()));
 
-		if(FromCid >= 0)
+		if(FromCid.has_value())
 		{
 			const float HealerHelperDuration = 20;
-			AddHelper(FromCid, HealerHelperDuration);
+			AddHelper(FromCid.value(), HealerHelperDuration);
 		}
 	}
 
 	return Healed;
 }
 
-bool CInfClassCharacter::GiveArmor(int HitPoints, int FromCid)
+bool CInfClassCharacter::GiveArmor(int HitPoints, std::optional<int> FromCid)
 {
 	if(GetClass() && GetClass()->IsHealingDisabled())
 	{
@@ -848,10 +872,10 @@ bool CInfClassCharacter::GiveArmor(int HitPoints, int FromCid)
 		int Sound = SOUND_PICKUP_ARMOR;
 		GameContext()->CreateSound(GetPos(), Sound, CmaskOne(GetCid()));
 
-		if(FromCid >= 0)
+		if(FromCid.has_value())
 		{
 			const float HealerHelperDuration = 20;
-			AddHelper(FromCid, HealerHelperDuration);
+			AddHelper(FromCid.value(), HealerHelperDuration);
 		}
 	}
 
@@ -972,12 +996,32 @@ void CInfClassCharacter::UnlockPosition()
 	m_PositionLocked = false;
 }
 
+void CInfClassCharacter::CancelLoveEffect()
+{
+	m_LoveTick = -1;
+}
+
+void CInfClassCharacter::PutToSleep(float Duration, std::optional<int> FromCid)
+{
+	int NewTicks = Server()->TickSpeed() * Duration;
+	if (NewTicks > m_SleepingTicks)
+	{
+		m_SleepingTicks = NewTicks;
+		m_PutToSleepBy = FromCid;
+	}
+}
+
+void CInfClassCharacter::CancelSleeping()
+{
+	m_SleepingTicks = 0;
+}
+
 bool CInfClassCharacter::IsInSlowMotion() const
 {
 	return m_SlowMotionTick > 0;
 }
 
-float CInfClassCharacter::SlowMotionEffect(float Duration, int FromCid)
+float CInfClassCharacter::SlowMotionEffect(float Duration, std::optional<int> FromCid)
 {
 	if(Duration == 0)
 		return 0.0f;
@@ -1150,6 +1194,12 @@ void CInfClassCharacter::GetDeathContext(const SDamageContext &DamageContext, De
 		AddUnique(m_LastFreezer, &MustBeKillerOrAssistant);
 	}
 
+	if(IsSleeping() && (m_PutToSleepBy.has_value()))
+	{
+		// The Freezer must be either the Killer or the Assistant
+		AddUnique(m_PutToSleepBy.value(), &MustBeKillerOrAssistant);
+	}
+
 	ClientsArray HookersRightNow;
 	if(m_LastHookerTick + 1 >= Server()->Tick())
 	{
@@ -1193,16 +1243,16 @@ void CInfClassCharacter::GetDeathContext(const SDamageContext &DamageContext, De
 		}
 	}
 
-	if(IsInSlowMotion() && (m_SlowEffectApplicant >= 0))
+	if(IsInSlowMotion() && m_SlowEffectApplicant.has_value())
 	{
 		// The Looper should be the Assistant (if not the killer) - before any other player
-		AddUnique(m_SlowEffectApplicant, &Assistants);
+		AddUnique(m_SlowEffectApplicant.value(), &Assistants);
 	}
 
-	if(IsBlind())
+	if(IsBlind() && m_LastBlinder.has_value())
 	{
 		// The Blinder should be the Assistant (if not the killer) - before any other player
-		AddUnique(m_LastBlinder, &Assistants);
+		AddUnique(m_LastBlinder.value(), &Assistants);
 	}
 
 	if(GivenKiller != GetCid())
@@ -1389,13 +1439,7 @@ void CInfClassCharacter::RemoveReferencesToCid(int ClientId)
 
 	m_LastHookers.RemoveOne(ClientId);
 
-	for(int i = m_TakenDamageDetails.Size() - 1; i >= 0; --i)
-	{
-		if(m_TakenDamageDetails.At(i).From == ClientId)
-		{
-			m_TakenDamageDetails.RemoveAt(i);
-		}
-	}
+	std::erase_if(m_TakenDamageDetails, [ClientId](const CDamagePoint &DP) { return DP.From == ClientId; });
 }
 
 void CInfClassCharacter::SaturateVelocity(vec2 Force, float MaxSpeed)
@@ -1524,7 +1568,7 @@ void CInfClassCharacter::SetSuperWeaponIndicatorEnabled(bool Enabled)
 	m_HasIndicator = Enabled;
 }
 
-INFWEAPON CInfClassCharacter::GetInfWeaponId(int WID) const
+EInfclassWeapon CInfClassCharacter::GetInfWeaponId(int WID) const
 {
 	if(WID < 0)
 		WID = m_ActiveWeapon;
@@ -1534,9 +1578,11 @@ INFWEAPON CInfClassCharacter::GetInfWeaponId(int WID) const
 		switch(GetPlayerClass())
 		{
 		case EPlayerClass::Ninja:
-			return INFWEAPON::NINJA_HAMMER;
+			return EInfclassWeapon::NINJA_KATANA;
+		case EPlayerClass::Hero:
+			return EInfclassWeapon::TURRET_INSTALL_KIT;
 		default:
-			return INFWEAPON::HAMMER;
+			return EInfclassWeapon::HAMMER;
 		}
 	}
 	else if(WID == WEAPON_GUN)
@@ -1544,24 +1590,24 @@ INFWEAPON CInfClassCharacter::GetInfWeaponId(int WID) const
 		switch(GetPlayerClass())
 		{
 		case EPlayerClass::Mercenary:
-			return INFWEAPON::MERCENARY_GUN;
+			return EInfclassWeapon::MERCENARY_GUN;
 		default:
-			return INFWEAPON::GUN;
+			return EInfclassWeapon::GUN;
 		}
-		return INFWEAPON::GUN;
+		return EInfclassWeapon::GUN;
 	}
 	else if(WID == WEAPON_SHOTGUN)
 	{
 		switch(GetPlayerClass())
 		{
 		case EPlayerClass::Medic:
-			return INFWEAPON::MEDIC_SHOTGUN;
+			return EInfclassWeapon::MEDIC_SHOTGUN;
 		case EPlayerClass::Hero:
-			return INFWEAPON::HERO_SHOTGUN;
+			return EInfclassWeapon::HERO_SHOTGUN;
 		case EPlayerClass::Biologist:
-			return INFWEAPON::BIOLOGIST_SHOTGUN;
+			return EInfclassWeapon::RICOCHET_SHOTGUN;
 		default:
-			return INFWEAPON::SHOTGUN;
+			return EInfclassWeapon::SHOTGUN;
 		}
 	}
 	else if(WID == WEAPON_GRENADE)
@@ -1569,21 +1615,21 @@ INFWEAPON CInfClassCharacter::GetInfWeaponId(int WID) const
 		switch(GetPlayerClass())
 		{
 		case EPlayerClass::Mercenary:
-			return INFWEAPON::MERCENARY_GRENADE;
+			return EInfclassWeapon::POISON_GRENADE;
 		case EPlayerClass::Medic:
-			return INFWEAPON::MEDIC_GRENADE;
+			return EInfclassWeapon::HEALING_GRENADE;
 		case EPlayerClass::Soldier:
-			return INFWEAPON::SOLDIER_GRENADE;
+			return EInfclassWeapon::SOLDIER_GRENADE;
 		case EPlayerClass::Ninja:
-			return INFWEAPON::NINJA_GRENADE;
+			return EInfclassWeapon::NINJA_GRENADE;
 		case EPlayerClass::Scientist:
-			return INFWEAPON::SCIENTIST_GRENADE;
+			return EInfclassWeapon::TELEPORT_GUN;
 		case EPlayerClass::Hero:
-			return INFWEAPON::HERO_GRENADE;
+			return EInfclassWeapon::HERO_GRENADE;
 		case EPlayerClass::Looper:
-			return INFWEAPON::LOOPER_GRENADE;
+			return EInfclassWeapon::LOOPER_GRENADE;
 		default:
-			return INFWEAPON::GRENADE;
+			return EInfclassWeapon::GRENADE;
 		}
 	}
 	else if(WID == WEAPON_LASER)
@@ -1591,34 +1637,34 @@ INFWEAPON CInfClassCharacter::GetInfWeaponId(int WID) const
 		switch(GetPlayerClass())
 		{
 		case EPlayerClass::Engineer:
-			return INFWEAPON::ENGINEER_LASER;
+			return EInfclassWeapon::ENGINEER_LASER;
 		case EPlayerClass::Ninja:
-			return INFWEAPON::BLINDING_LASER;
+			return EInfclassWeapon::BLINDING_LASER;
 		case EPlayerClass::Looper:
-			return INFWEAPON::LOOPER_LASER;
+			return EInfclassWeapon::LOOPER_LASER;
 		case EPlayerClass::Scientist:
-			return INFWEAPON::SCIENTIST_LASER;
+			return EInfclassWeapon::EXPLOSIVE_LASER;
 		case EPlayerClass::Sniper:
-			return INFWEAPON::SNIPER_LASER;
+			return EInfclassWeapon::SNIPER_RIFLE;
 		case EPlayerClass::Hero:
-			return INFWEAPON::HERO_LASER;
+			return EInfclassWeapon::HERO_LASER;
 		case EPlayerClass::Biologist:
-			return INFWEAPON::BIOLOGIST_LASER;
+			return EInfclassWeapon::BIOLOGIST_MINE_LASER;
 		case EPlayerClass::Medic:
-			return INFWEAPON::MEDIC_LASER;
+			return EInfclassWeapon::MEDIC_LASER;
 		case EPlayerClass::Mercenary:
-			return INFWEAPON::MERCENARY_LASER;
+			return EInfclassWeapon::MERCENARY_UPGRADE_LASER;
 		default:
-			return INFWEAPON::LASER;
+			return EInfclassWeapon::LASER;
 		}
 	}
 	else if(WID == WEAPON_NINJA)
 	{
-		return INFWEAPON::NINJA;
+		return EInfclassWeapon::NINJA;
 	}
 	else
 	{
-		return INFWEAPON::NONE;
+		return EInfclassWeapon::NONE;
 	}
 }
 
@@ -1652,7 +1698,7 @@ void CInfClassCharacter::HandleMapMenu()
 	{
 		pPlayer->m_MapMenuItem = -1;
 		GameServer()->SendBroadcast_Localization(GetCid(),
-			BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME,
+			EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME,
 			_("Choose your class"), NULL);
 
 		return;
@@ -1664,7 +1710,7 @@ void CInfClassCharacter::HandleMapMenu()
 	if(HoveredMenuItem == CMapConverter::MENUCLASS_RANDOM)
 	{
 		GameServer()->SendBroadcast_Localization(GetCid(),
-			BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME, _("Random choice"), nullptr);
+			EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME, _("Random choice"), nullptr);
 		pPlayer->m_MapMenuItem = HoveredMenuItem;
 	}
 	else
@@ -1678,20 +1724,20 @@ void CInfClassCharacter::HandleMapMenu()
 		{
 			const char *pClassName = CInfClassGameController::GetClassDisplayName(NewClass);
 			GameServer()->SendBroadcast_Localization(GetCid(),
-				BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME,
+				EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME,
 				pClassName, nullptr);
 		}
 		break;
 		case CLASS_AVAILABILITY::DISABLED:
 			GameServer()->SendBroadcast_Localization(GetCid(),
-				BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME,
+				EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME,
 				_("The class is disabled"), nullptr);
 			break;
 		case CLASS_AVAILABILITY::NEED_MORE_PLAYERS:
 		{
 			int MinPlayers = GameController()->GetMinPlayersForClass(NewClass);
 			GameServer()->SendBroadcast_Localization_P(GetCid(),
-				BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME,
+				EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME,
 				MinPlayers,
 				_P("Need at least {int:MinPlayers} player",
 					"Need at least {int:MinPlayers} players"),
@@ -1701,7 +1747,7 @@ void CInfClassCharacter::HandleMapMenu()
 		break;
 		case CLASS_AVAILABILITY::LIMIT_EXCEEDED:
 			GameServer()->SendBroadcast_Localization(GetCid(),
-				BROADCAST_PRIORITY_INTERFACE, BROADCAST_DURATION_REALTIME,
+				EBroadcastPriority::INTERFACE, BROADCAST_DURATION_REALTIME,
 				_("The class limit exceeded"), nullptr);
 			break;
 		}
@@ -2115,6 +2161,16 @@ bool CInfClassCharacter::IsInvisible() const
 	return m_IsInvisible;
 }
 
+bool CInfClassCharacter::HasGrantedInvisibility() const
+{
+	return Server()->Tick() < m_GrantedInvisibilityUntilTick;
+}
+
+bool CInfClassCharacter::IsSolo() const
+{
+	return m_Core.m_Solo;
+}
+
 bool CInfClassCharacter::IsInvincible() const
 {
 	return m_Invincible || (m_ProtectionTick > 0);
@@ -2157,7 +2213,7 @@ void CInfClassCharacter::Unfreeze()
 
 	if(m_pPlayer)
 	{
-		GameServer()->ClearBroadcast(m_pPlayer->GetCid(), BROADCAST_PRIORITY_EFFECTSTATE);
+		GameServer()->ClearBroadcast(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE);
 	}
 	GameServer()->CreatePlayerSpawn(GetPos());
 
@@ -2192,15 +2248,15 @@ int CInfClassCharacter::GetFreezer() const
 	return IsFrozen() ? m_LastFreezer : -1;
 }
 
-void CInfClassCharacter::ResetBlinding()
+void CInfClassCharacter::ResetBlindness()
 {
 	m_BlindnessTicks = 0;
 }
 
-void CInfClassCharacter::MakeBlind(int ClientId, float Duration)
+void CInfClassCharacter::MakeBlind(float Duration, std::optional<int> FromCid)
 {
 	m_BlindnessTicks = Server()->TickSpeed() * Duration;
-	m_LastBlinder = ClientId;
+	m_LastBlinder = FromCid;
 
 	GameServer()->SendEmoticon(GetCid(), EMOTICON_QUESTION);
 }
@@ -2235,6 +2291,21 @@ void CInfClassCharacter::MakeInvisible()
 	m_IsInvisible = true;
 }
 
+void CInfClassCharacter::GrantInvisibility(float Duration)
+{
+	m_GrantedInvisibilityUntilTick = Server()->Tick() + Server()->TickSpeed() * Duration;
+	if(Duration > 0)
+	{
+		MakeInvisible();
+	}
+}
+
+void CInfClassCharacter::SetSoloForDuration(float Duration)
+{
+	m_SoloUntilTick = Server()->Tick() + Server()->TickSpeed() * Duration;
+	SetSolo(Duration > 0);
+}
+
 void CInfClassCharacter::GrantSpawnProtection(float Duration)
 {
 	// Indicate time left being protected via eyes
@@ -2248,6 +2319,7 @@ void CInfClassCharacter::GrantSpawnProtection(float Duration)
 void CInfClassCharacter::PreCoreTick()
 {
 	m_InputBackup = m_Input;
+	const int CurrentTick = Server()->Tick();
 
 	--m_FrozenTime;
 	if(m_IsFrozen)
@@ -2259,7 +2331,7 @@ void CInfClassCharacter::PreCoreTick()
 		else
 		{
 			int FreezeSec = 1 + (m_FrozenTime / Server()->TickSpeed());
-			GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), BROADCAST_PRIORITY_EFFECTSTATE, BROADCAST_DURATION_REALTIME, _("You are frozen: {sec:EffectDuration}"), "EffectDuration", &FreezeSec, NULL);
+			GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE, BROADCAST_DURATION_REALTIME, _("You are frozen: {sec:EffectDuration}"), "EffectDuration", &FreezeSec, NULL);
 		}
 	}
 
@@ -2270,8 +2342,16 @@ void CInfClassCharacter::PreCoreTick()
 		if(m_SlowMotionTick > 0)
 		{
 			int SloMoSec = 1 + (m_SlowMotionTick / Server()->TickSpeed());
-			GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), BROADCAST_PRIORITY_EFFECTSTATE, BROADCAST_DURATION_REALTIME, _("You are slowed: {sec:EffectDuration}"), "EffectDuration", &SloMoSec, NULL);
+			GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE, BROADCAST_DURATION_REALTIME, _("You are slowed: {sec:EffectDuration}"), "EffectDuration", &SloMoSec, NULL);
 		}
+	}
+
+	if(m_SoloUntilTick > CurrentTick)
+	{
+		const int SoloTicks = m_SoloUntilTick - CurrentTick;
+		int EffectDuration = 1 + (SoloTicks / Server()->TickSpeed());
+		GameServer()->SendBroadcast_Localization(m_pPlayer->GetCid(), EBroadcastPriority::EFFECTSTATE,
+			BROADCAST_DURATION_REALTIME, _("You are in Solo mode for {sec:EffectDuration}"), "EffectDuration", &EffectDuration, nullptr);
 	}
 
 	if(m_AntiFireTime > 0)
@@ -2303,7 +2383,7 @@ void CInfClassCharacter::PreCoreTick()
 	if(m_pClass)
 		m_pClass->OnCharacterPreCoreTick();
 
-	if(IsFrozen())
+	if(IsFrozen() || IsSleeping())
 	{
 		if(m_FrozenTime % Server()->TickSpeed() == Server()->TickSpeed() - 1)
 		{
@@ -2397,7 +2477,7 @@ void CInfClassCharacter::SnapCharacter(int SnappingClient, int Id)
 	pCharacter->m_Armor = 0;
 
 	/* INFECTION MODIFICATION START ***************************************/
-	if(GetInfWeaponId(m_ActiveWeapon) == INFWEAPON::NINJA_HAMMER)
+	if(GetInfWeaponId(m_ActiveWeapon) == EInfclassWeapon::NINJA_KATANA)
 	{
 		Weapon = WEAPON_NINJA;
 	}
@@ -2456,9 +2536,9 @@ void CInfClassCharacter::SnapCharacter(int SnappingClient, int Id)
 	}
 
 	/* INFECTION MODIFICATION START ***************************************/
-	if(GetInfWeaponId(m_ActiveWeapon) == INFWEAPON::MERCENARY_GUN)
+	if(GetInfWeaponId(m_ActiveWeapon) == EInfclassWeapon::MERCENARY_GUN)
 	{
-		pCharacter->m_AmmoCount /= (Server()->GetMaxAmmo(INFWEAPON::MERCENARY_GUN) / 10);
+		pCharacter->m_AmmoCount /= (GameController()->GetMaxAmmo(EInfclassWeapon::MERCENARY_GUN) / 10);
 	}
 	/* INFECTION MODIFICATION END *****************************************/
 
@@ -2495,7 +2575,6 @@ void CInfClassCharacter::DestroyChildEntities()
 		CGameWorld::ENTTYPE_LOOPER_WALL,
 		CGameWorld::ENTTYPE_SOLDIER_BOMB,
 		CGameWorld::ENTTYPE_SCATTER_GRENADE,
-		CGameWorld::ENTTYPE_MEDIC_GRENADE,
 		CGameWorld::ENTTYPE_MERCENARY_BOMB,
 		CGameWorld::ENTTYPE_SCIENTIST_MINE,
 		CGameWorld::ENTTYPE_BIOLOGIST_MINE,
@@ -2555,7 +2634,7 @@ void CInfClassCharacter::UpdateTuningParam()
 		NoGravity = true;
 		NoHookAcceleration = true;
 	}
-	if(m_IsFrozen)
+	if(m_IsFrozen || IsSleeping())
 	{
 		NoHook = true;
 		NoControls = true;

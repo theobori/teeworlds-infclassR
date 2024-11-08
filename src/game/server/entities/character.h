@@ -45,15 +45,17 @@ public:
 	bool IsGrounded() const;
 
 	void SetWeapon(int W);
+	void SetSolo(bool Solo);
+
 	virtual void HandleWeaponSwitch();
 	void DoWeaponSwitch();
 
 	void HandleWeapons();
-	virtual void HandleNinja() = 0;
+	virtual void HandleNinja() {};
 	void HandleWaterJump();
 
-	void OnPredictedInput(CNetObj_PlayerInput *pNewInput);
-	void OnDirectInput(CNetObj_PlayerInput *pNewInput);
+	void OnPredictedInput(const CNetObj_PlayerInput *pNewInput);
+	void OnDirectInput(const CNetObj_PlayerInput *pNewInput);
 	void ReleaseHook();
 	void ResetHook();
 	void ResetInput();
@@ -180,7 +182,7 @@ protected:
 
 	/* INFECTION MODIFICATION START ***************************************/
 protected:
-	virtual void OnTotalHealthChanged(int Difference) = 0;
+	virtual void OnTotalHealthChanged(int Difference) {};
 
 	int m_AntiFireTime;
 	int m_PainSoundTimer;

@@ -209,63 +209,66 @@ void IGameController::DoActivityCheck()
 				break;
 		}
 #endif
-		if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS && (Server()->GetAuthedState(i) == IServer::AUTHED_NO))
+		CPlayer *pPlayer = GameServer()->m_apPlayers[i];
+		if(!pPlayer)
+			continue;
+		if(pPlayer->GetTeam() == TEAM_SPECTATORS)
+			continue;
+		if(Server()->GetAuthedState(i) != IServer::AUTHED_NO)
+			continue;
+		if(pPlayer->IsBot())
+			continue;
+
+		float PlayerMaxInactiveTimeSecs = pPlayer->IsHuman() ? HumanMaxInactiveTimeSecs : InfectedMaxInactiveTimeSecs;
+		if(PlayerMaxInactiveTimeSecs < 20)
 		{
-			CPlayer *pPlayer = GameServer()->m_apPlayers[i];
-			float PlayerMaxInactiveTimeSecs = pPlayer->IsHuman() ? HumanMaxInactiveTimeSecs : InfectedMaxInactiveTimeSecs;
-			if(PlayerMaxInactiveTimeSecs < 20)
+			PlayerMaxInactiveTimeSecs = 20;
+		}
+
+		int WarningTick = pPlayer->m_LastActionTick + (PlayerMaxInactiveTimeSecs - 10) * Server()->TickSpeed();
+		int KickingTick = pPlayer->m_LastActionTick + PlayerMaxInactiveTimeSecs * Server()->TickSpeed();
+
+		if(Server()->Tick() > KickingTick)
+		{
+			switch(g_Config.m_SvInactiveKick)
 			{
-				PlayerMaxInactiveTimeSecs = 20;
+			case 0:
+			{
+				// move player to spectator
+				DoTeamChange(GameServer()->m_apPlayers[i], TEAM_SPECTATORS);
 			}
-
-			int WarningTick = pPlayer->m_LastActionTick + (PlayerMaxInactiveTimeSecs - 10) * Server()->TickSpeed();
-			int KickingTick = pPlayer->m_LastActionTick + PlayerMaxInactiveTimeSecs * Server()->TickSpeed();
-
-			if(Server()->Tick() > KickingTick)
+			break;
+			case 1:
 			{
-				switch(g_Config.m_SvInactiveKick)
-				{
-				case 0:
-				{
-					// move player to spectator
-					DoTeamChange(GameServer()->m_apPlayers[i], TEAM_SPECTATORS);
-				}
-				break;
-				case 1:
-				{
-					// move player to spectator if the reserved slots aren't filled yet, kick him otherwise
-					int Spectators = 0;
-					for(auto &pPlayer : GameServer()->m_apPlayers)
-						if(pPlayer && pPlayer->GetTeam() == TEAM_SPECTATORS)
-							++Spectators;
-					if(Spectators >= g_Config.m_SvSpectatorSlots)
-						Server()->Kick(i, "Kicked for inactivity");
-					else
-						DoTeamChange(GameServer()->m_apPlayers[i], TEAM_SPECTATORS);
-				}
-				break;
-				case 2:
-				{
-					// kick the player
+				// move player to spectator if the reserved slots aren't filled yet, kick him otherwise
+				int Spectators = 0;
+				for(auto &pPlayer : GameServer()->m_apPlayers)
+					if(pPlayer && pPlayer->GetTeam() == TEAM_SPECTATORS)
+						++Spectators;
+				if(Spectators >= g_Config.m_SvSpectatorSlots)
 					Server()->Kick(i, "Kicked for inactivity");
-				}
-				}
+				else
+					DoTeamChange(GameServer()->m_apPlayers[i], TEAM_SPECTATORS);
 			}
-			else if(Server()->Tick() >= WarningTick)
+			break;
+			case 2:
 			{
-				// Warn
-				const char *pText = Config()->m_SvInactiveKick == 0
-					? _C("Inactive kick broadcast message", "Warning: {sec:RemainingTime} until a move to spec for inactivity")
-					: _C("Inactive kick broadcast message", "Warning: {sec:RemainingTime} until a kick for inactivity");
-				int Seconds = (KickingTick - Server()->Tick()) / Server()->TickSpeed() + 1;
-				GameServer()->SendBroadcast_Localization(pPlayer->GetCid(),
-					BROADCAST_PRIORITY_INTERFACE,
-					BROADCAST_DURATION_REALTIME,
-					pText,
-					"RemainingTime", &Seconds,
-					nullptr
-				);
+				// kick the player
+				Server()->Kick(i, "Kicked for inactivity");
 			}
+			}
+		}
+		else if(Server()->Tick() >= WarningTick)
+		{
+			// Warn
+			const char *pText = Config()->m_SvInactiveKick == 0 ? _C("Inactive kick broadcast message", "Warning: {sec:RemainingTime} until a move to spec for inactivity") : _C("Inactive kick broadcast message", "Warning: {sec:RemainingTime} until a kick for inactivity");
+			int Seconds = (KickingTick - Server()->Tick()) / Server()->TickSpeed() + 1;
+			GameServer()->SendBroadcast_Localization(pPlayer->GetCid(),
+				EBroadcastPriority::INTERFACE,
+				BROADCAST_DURATION_REALTIME,
+				pText,
+				"RemainingTime", &Seconds,
+				nullptr);
 		}
 	}
 }
@@ -375,6 +378,11 @@ void IGameController::RotateMapTo(const char *pMapName)
 	{
 		m_RoundCount = 0;
 	}
+}
+
+int IGameController::GetNextClientUniqueId()
+{
+	return m_NextUniqueClientId++;
 }
 
 void IGameController::DoTeamChange(CPlayer *pPlayer, int Team, bool DoChatMsg)
@@ -1200,7 +1208,7 @@ bool IGameController::CanJoinTeam(int Team, int NotThisId)
 	{
 		char aBuf[128];
 		str_format(aBuf, sizeof(aBuf), "Only %d active players are allowed", Server()->MaxClients() - g_Config.m_SvSpectatorSlots);
-		GameServer()->SendBroadcast(NotThisId, aBuf, BROADCAST_PRIORITY_GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
+		GameServer()->SendBroadcast(NotThisId, aBuf, EBroadcastPriority::GAMEANNOUNCE, BROADCAST_DURATION_GAMEANNOUNCE);
 	}
 
 	return NumbersAreOk;

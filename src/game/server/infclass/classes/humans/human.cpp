@@ -142,19 +142,19 @@ bool CInfClassHuman::SetupSkin(const CSkinContext &Context, CWeakSkinInfo *pOutp
 
 void CInfClassHuman::GetAmmoRegenParams(int Weapon, WeaponRegenParams *pParams)
 {
-	INFWEAPON InfWID = m_pCharacter->GetInfWeaponId(Weapon);
-	pParams->MaxAmmo = Server()->GetMaxAmmo(InfWID);
-	pParams->RegenInterval = Server()->GetAmmoRegenTime(InfWID);
+	EInfclassWeapon InfWID = m_pCharacter->GetInfWeaponId(Weapon);
+	pParams->MaxAmmo = GameController()->GetMaxAmmo(InfWID);
+	pParams->RegenInterval = GameController()->GetAmmoRegenTime(InfWID);
 
 	const float RegenIntervalModifier = m_WeaponRegenIntervalModifier[Weapon];
 	pParams->RegenInterval *= RegenIntervalModifier;
 
 	switch(InfWID)
 	{
-	case INFWEAPON::NINJA_GRENADE:
+	case EInfclassWeapon::NINJA_GRENADE:
 		pParams->MaxAmmo = minimum(pParams->MaxAmmo + m_NinjaAmmoBuff, 10);
 		break;
-	case INFWEAPON::MERCENARY_GUN:
+	case EInfclassWeapon::MERCENARY_GUN:
 		if(m_pCharacter->GetInAirTick() > Server()->TickSpeed() * 4)
 		{
 			pParams->RegenInterval = 0;
@@ -303,7 +303,7 @@ void CInfClassHuman::OnPlayerSnap(int SnappingClient, int InfClassVersion)
 					continue;
 				}
 
-				pClassInfo->m_Data1 = pWall->GetEndTick();
+				pClassInfo->m_Data1 = pWall->GetEndTick().value_or(-1);
 				break;
 			}
 			break;
@@ -321,7 +321,7 @@ void CInfClassHuman::OnPlayerSnap(int SnappingClient, int InfClassVersion)
 					continue;
 				}
 
-				pClassInfo->m_Data1 = pWall->GetEndTick();
+				pClassInfo->m_Data1 = pWall->GetEndTick().value_or(-1);
 				break;
 			}
 			break;
@@ -688,7 +688,7 @@ void CInfClassHuman::HandleNinja()
 {
 	if(GetPlayerClass() != EPlayerClass::Ninja)
 		return;
-	if(m_pCharacter->GetInfWeaponId(m_pCharacter->GetActiveWeapon()) != INFWEAPON::NINJA_HAMMER)
+	if(m_pCharacter->GetInfWeaponId(m_pCharacter->GetActiveWeapon()) != EInfclassWeapon::NINJA_KATANA)
 		return;
 
 	m_pCharacter->m_DartLifeSpan--;
@@ -715,7 +715,7 @@ void CInfClassHuman::HandleNinja()
 		if(NewPos != OldPos)
 		{
 			// Find other players
-			for(CInfClassCharacter *pTarget = (CInfClassCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER); pTarget; pTarget = (CInfClassCharacter *)pTarget->TypeNext())
+			for(TEntityPtr<CInfClassCharacter> pTarget = GameWorld()->FindFirst<CInfClassCharacter>(); pTarget; ++pTarget)
 			{
 				if(m_apHitObjects.Capacity() == m_apHitObjects.Size())
 				{
@@ -794,7 +794,7 @@ void CInfClassHuman::OnHammerFired(WeaponFireContext *pFireContext)
 		PlaceEngineerWall(pFireContext);
 		return;
 	case EPlayerClass::Soldier:
-		FireSoldierBomb(pFireContext);
+		CSoldierBomb::OnFired(m_pCharacter, pFireContext);
 		return;
 	case EPlayerClass::Ninja:
 		ActivateNinja(pFireContext);
@@ -819,6 +819,8 @@ void CInfClassHuman::OnHammerFired(WeaponFireContext *pFireContext)
 	for(const int TargetCid : Targets)
 	{
 		CInfClassCharacter *pTarget = GameController()->GetCharacter(TargetCid);
+		if(pTarget->IsSolo())
+			continue;
 
 		if(GameServer()->Collision()->IntersectLine(ProjStartPos, pTarget->GetPos()))
 			continue;
@@ -973,8 +975,8 @@ void CInfClassHuman::OnGrenadeFired(WeaponFireContext *pFireContext)
 	switch(GetPlayerClass())
 	{
 	case EPlayerClass::Scientist:
-		OnPortalGunFired(pFireContext);
-		break;
+		CLaserTeleport::OnFired(m_pCharacter, pFireContext, Config()->m_InfScientistTpSelfharm);
+		return;
 	case EPlayerClass::Medic:
 		OnMedicGrenadeFired(pFireContext);
 		break;
@@ -1016,11 +1018,11 @@ void CInfClassHuman::OnLaserFired(WeaponFireContext *pFireContext)
 	switch(GetPlayerClass())
 	{
 	case EPlayerClass::Ninja:
-		OnBlindingLaserFired(pFireContext);
-		break;
+		CBlindingLaser::OnFired(m_pCharacter, pFireContext);
+		return;
 	case EPlayerClass::Biologist:
-		OnBiologistLaserFired(pFireContext);
-		break;
+		CBiologistMine::OnFired(m_pCharacter, pFireContext, Config()->m_InfBioMineLasers);
+		return;
 	case EPlayerClass::Scientist:
 		StartEnergy *= 0.6f;
 		new CScientistLaser(GameServer(), GetPos(), Direction, StartEnergy, GetCid(), Damage);
@@ -1210,236 +1212,37 @@ void CInfClassHuman::BroadcastWeaponState() const
 {
 	const int CurrentTick = Server()->Tick();
 	int ClientVersion = Server()->GetClientInfclassVersion(GetCid());
+	const EInfclassWeapon Weapon = m_pCharacter->GetInfWeaponId();
 
-	if(GetPlayerClass() == EPlayerClass::Engineer)
+	switch(Weapon)
 	{
-		if(ClientVersion >= VERSION_INFC_160)
-			return;
-
-		CEngineerWall *pCurrentWall = NULL;
-		for(CEngineerWall *pWall = (CEngineerWall*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_ENGINEER_WALL); pWall; pWall = (CEngineerWall*) pWall->TypeNext())
-		{
-			if(pWall->GetOwner() == m_pPlayer->GetCid())
-			{
-				pCurrentWall = pWall;
-				break;
-			}
-		}
-
-		if(pCurrentWall && pCurrentWall->HasSecondPosition())
-		{
-			int RemainingTicks = pCurrentWall->GetEndTick() - CurrentTick;
-			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
-			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_("Laser wall: {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				NULL
-			);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Medic)
+	case EInfclassWeapon::MEDIC_LASER:
 	{
-		if(m_pCharacter->GetActiveWeapon() == WEAPON_LASER)
-		{
-			int MinimumHP = Config()->m_InfRevivalDamage + 1;
-			int MinimumInfected = GameController()->MinimumInfectedForRevival();
+		int MinimumHP = Config()->m_InfRevivalDamage + 1;
+		int MinimumInfected = GameController()->MinimumInfectedForRevival();
 
-			if(m_pCharacter->GetHealthArmorSum() < MinimumHP)
-			{
-				GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_("You need at least {int:MinHp} HP to revive a zombie"),
-					"MinHp", &MinimumHP,
-					NULL
-				);
-			}
-			else if(GameController()->GetInfectedCount() < MinimumInfected)
-			{
-				GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_("Too few zombies to revive anyone (less than {int:MinZombies})"),
-					"MinZombies", &MinimumInfected,
-					NULL
-				);
-			}
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Looper)
-	{
-		if(ClientVersion >= VERSION_INFC_160)
-			return;
-
-		//Potential variable name conflict with engineerwall with pCurrentWall
-		CLooperWall* pCurrentWall = NULL;
-		for(CLooperWall *pWall = (CLooperWall*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_LOOPER_WALL); pWall; pWall = (CLooperWall*) pWall->TypeNext())
-		{
-			if(pWall->GetOwner() == m_pPlayer->GetCid())
-			{
-				pCurrentWall = pWall;
-				break;
-			}
-		}
-
-		if(pCurrentWall && pCurrentWall->HasSecondPosition())
-		{
-			int RemainingTicks = pCurrentWall->GetEndTick() - CurrentTick;
-			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
-			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_("Looper laser wall: {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				NULL
-			);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Soldier)
-	{
-		int NumBombs = 0;
-		for(CSoldierBomb *pBomb = (CSoldierBomb*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_SOLDIER_BOMB); pBomb; pBomb = (CSoldierBomb*) pBomb->TypeNext())
-		{
-			if(pBomb->GetOwner() == m_pPlayer->GetCid())
-				NumBombs += pBomb->GetNbBombs();
-		}
-
-		if(NumBombs)
-		{
-			GameServer()->SendBroadcast_Localization_P(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				NumBombs,
-				_CP("Soldier", "One bomb left", "{int:NumBombs} bombs left"),
-				"NumBombs", &NumBombs,
-				NULL
-			);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Scientist)
-	{
-		int NumMines = 0;
-		for(CScientistMine *pMine = (CScientistMine*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_SCIENTIST_MINE); pMine; pMine = (CScientistMine*) pMine->TypeNext())
-		{
-			if(pMine->GetOwner() == m_pPlayer->GetCid())
-				NumMines++;
-		}
-
-		CWhiteHole* pCurrentWhiteHole = NULL;
-		for(CWhiteHole *pWhiteHole = (CWhiteHole*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_WHITE_HOLE); pWhiteHole; pWhiteHole = (CWhiteHole*) pWhiteHole->TypeNext())
-		{
-			if(pWhiteHole->GetOwner() == m_pPlayer->GetCid())
-			{
-				pCurrentWhiteHole = pWhiteHole;
-				break;
-			}
-		}
-
-		if(m_BroadcastWhiteHoleReady + (2 * Server()->TickSpeed()) > Server()->Tick())
+		if(m_pCharacter->GetHealthArmorSum() < MinimumHP)
 		{
 			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_("The white hole is available!"),
-				NULL
-			);
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("You need at least {int:MinHp} HP to revive a zombie"),
+				"MinHp", &MinimumHP,
+				NULL);
 		}
-		else if(NumMines > 0 && !pCurrentWhiteHole)
-		{
-			GameServer()->SendBroadcast_Localization_P(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME, NumMines,
-				_P("One mine is active", "{int:NumMines} mines are active"),
-				"NumMines", &NumMines,
-				NULL
-			);
-		}
-		else if(NumMines <= 0 && pCurrentWhiteHole)
-		{
-			int RemainingTicks = pCurrentWhiteHole->GetEndTick() - CurrentTick;
-			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
-			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_("White hole: {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				NULL
-			);
-		}
-		else if(NumMines > 0 && pCurrentWhiteHole)
-		{
-			int RemainingTicks = pCurrentWhiteHole->GetEndTick() - CurrentTick;
-			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
-			dynamic_string Buffer;
-			Server()->Localization()->Format_LP(Buffer, GetPlayer()->GetLanguage(), NumMines,
-				_P("One mine is active", "{int:NumMines} mines are active"),
-				"NumMines", &NumMines,
-				nullptr);
-			Buffer.append("\n");
-			Server()->Localization()->Format_L(Buffer, GetPlayer()->GetLanguage(),
-				_("White hole: {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				nullptr);
-			GameServer()->SendBroadcast(GetCid(), Buffer.buffer(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Biologist)
-	{
-		int NumMines = 0;
-		for(CBiologistMine *pMine = (CBiologistMine*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_BIOLOGIST_MINE); pMine; pMine = (CBiologistMine*) pMine->TypeNext())
-		{
-			if(pMine->GetOwner() == m_pPlayer->GetCid())
-				NumMines++;
-		}
-
-		if(NumMines > 0)
+		else if(GameController()->GetInfectedCount() < MinimumInfected)
 		{
 			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_C("Biologist", "Mine activated"),
-				NULL
-			);
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("Too few zombies to revive anyone (less than {int:MinZombies})"),
+				"MinZombies", &MinimumInfected,
+				NULL);
 		}
+		return;
 	}
-	else if(GetPlayerClass() == EPlayerClass::Ninja)
-	{
-		int TargetId = m_NinjaTargetCid;
-		int CoolDown = m_NinjaTargetTick - Server()->Tick();
-
-		const ClientsArray &ValidNinjaTargets = GameController()->GetValidNinjaTargets();
-
-		if((CoolDown > 0))
-		{
-			int Seconds = 1 + CoolDown / Server()->TickSpeed();
-			GameServer()->SendBroadcast_Localization(GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_C("Ninja", "Next target in {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				NULL
-			);
-		}
-		else if(TargetId >= 0)
-		{
-			GameServer()->SendBroadcast_Localization(GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_C("Ninja", "Target to eliminate: {str:PlayerName}"),
-				"PlayerName", Server()->ClientName(TargetId),
-				NULL
-			);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Sniper)
-	{
-		if(m_pCharacter->PositionIsLocked())
-		{
-			int Seconds = 1+m_PositionLockTicksRemaining/Server()->TickSpeed();
-			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-				_C("Sniper", "Position lock: {sec:RemainingTime}"),
-				"RemainingTime", &Seconds,
-				NULL
-			);
-		}
-	}
-	else if(GetPlayerClass() == EPlayerClass::Mercenary)
+	case EInfclassWeapon::MERCENARY_UPGRADE_LASER:
 	{
 		CMercenaryBomb *pCurrentBomb = nullptr;
-		for(CMercenaryBomb *pBomb = (CMercenaryBomb*) GameWorld()->FindFirst(CGameWorld::ENTTYPE_MERCENARY_BOMB); pBomb; pBomb = (CMercenaryBomb*) pBomb->TypeNext())
+		for(TEntityPtr<CMercenaryBomb> pBomb = GameWorld()->FindFirst<CMercenaryBomb>(); pBomb; ++pBomb)
 		{
 			if(pBomb->GetOwner() == m_pPlayer->GetCid())
 			{
@@ -1452,54 +1255,305 @@ void CInfClassHuman::BroadcastWeaponState() const
 		{
 			float BombLevel = pCurrentBomb->GetLoad() / static_cast<float>(Config()->m_InfMercBombs);
 
-			if(m_pCharacter->GetActiveWeapon() == WEAPON_LASER)
+			if(BombLevel < 1.0)
 			{
-				if(BombLevel < 1.0)
-				{
-					dynamic_string Line1;
-					Server()->Localization()->Format_L(Line1, GetPlayer()->GetLanguage(),
-						_C("Mercenary", "Use the laser to upgrade the bomb"), NULL);
+				dynamic_string Line1;
+				Server()->Localization()->Format_L(Line1, GetPlayer()->GetLanguage(),
+					_C("Mercenary", "Use the laser to upgrade the bomb"), NULL);
 
-					dynamic_string Line2;
-					Server()->Localization()->Format_L(Line2, GetPlayer()->GetLanguage(),
-						_C("Mercenary", "Explosive yield: {percent:BombLevel}"), "BombLevel", &BombLevel, NULL);
+				dynamic_string Line2;
+				Server()->Localization()->Format_L(Line2, GetPlayer()->GetLanguage(),
+					_C("Mercenary", "Explosive yield: {percent:BombLevel}"), "BombLevel", &BombLevel, NULL);
 
-					Line1.append("\n");
-					Line1.append(Line2);
+				Line1.append("\n");
+				Line1.append(Line2);
 
-					GameServer()->AddBroadcast(GetPlayer()->GetCid(), Line1.buffer(),
-						BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME);
-				}
-				else
-				{
-					GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-						BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-						_C("Mercenary", "The bomb is fully upgraded.\n"
-						  "There is nothing to do with the laser."), NULL
-					);
-				}
+				GameServer()->AddBroadcast(GetPlayer()->GetCid(), Line1.buffer(),
+					EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME);
 			}
 			else
 			{
 				GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_C("Mercenary", "Explosive yield: {percent:BombLevel}"),
-					"BombLevel", &BombLevel,
-					NULL
-				);
+					EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+					_C("Mercenary", "The bomb is fully upgraded.\n"
+									"There is nothing to do with the laser."),
+					NULL);
 			}
 		}
 		else
 		{
-			if(m_pCharacter->GetActiveWeapon() == WEAPON_LASER)
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Mercenary", "Use the hammer to place a bomb and\n"
+								"then use the laser to upgrade it"),
+				NULL);
+		}
+
+		return;
+	}
+	case EInfclassWeapon::TURRET_INSTALL_KIT:
+	{
+		int Turrets = m_TurretCount;
+		if(!GameController()->AreTurretsEnabled())
+		{
+			GameServer()->SendBroadcast_Localization(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("The turrets are not allowed by the game rules (at least right now)."),
+				nullptr);
+		}
+		else if(Turrets > 0)
+		{
+			int MaxTurrets = Config()->m_InfTurretMaxPerPlayer;
+			if(MaxTurrets == 1)
 			{
-				GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_C("Mercenary", "Use the hammer to place a bomb and\n"
-					  "then use the laser to upgrade it"),
-					NULL
-				);
+				GameServer()->SendBroadcast_Localization(GetCid(),
+					EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+					_("You have a turret. Use the hammer to place it."),
+					nullptr
+					);
 			}
+			else
+			{
+				GameServer()->SendBroadcast_Localization_P(GetCid(),
+					EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME, Turrets,
+					_("You have {int:NumTurrets} of {int:MaxTurrets} turrets. Use the hammer to place one."),
+					"NumTurrets", &Turrets,
+					"MaxTurrets", &MaxTurrets,
+					nullptr
+					);
+			}
+		}
+		else
+		{
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("You don't have a turret to place"),
+				nullptr
+				);
+		}
+		return;
+	}
+	default:
+		break;
+	}
+
+	if(GetPlayerClass() == EPlayerClass::Engineer)
+	{
+		if(ClientVersion >= VERSION_INFC_160)
+			return;
+
+		CEngineerWall *pOwnWall = nullptr;
+		for(TEntityPtr<CEngineerWall> pWall = GameWorld()->FindFirst<CEngineerWall>(); pWall; ++pWall)
+		{
+			if(pWall->GetOwner() == GetCid())
+			{
+				pOwnWall = pWall;
+				break;
+			}
+		}
+
+		if(pOwnWall && pOwnWall->HasSecondPosition() && pOwnWall->GetEndTick().has_value())
+		{
+			int RemainingTicks = pOwnWall->GetEndTick().value() - CurrentTick;
+			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
+			GameServer()->SendBroadcast_Localization(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("Laser wall: {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				nullptr
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Looper)
+	{
+		if(ClientVersion >= VERSION_INFC_160)
+			return;
+
+		CLooperWall* pOwnWall = nullptr;
+		for(TEntityPtr<CLooperWall> pWall = GameWorld()->FindFirst<CLooperWall>(); pWall; ++pWall)
+		{
+			if(pWall->GetOwner() == m_pPlayer->GetCid())
+			{
+				pOwnWall = pWall;
+				break;
+			}
+		}
+
+		if(pOwnWall && pOwnWall->HasSecondPosition())
+		{
+			int RemainingTicks = pOwnWall->GetEndTick().value() - CurrentTick;
+			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
+			GameServer()->SendBroadcast_Localization(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("Looper laser wall: {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				nullptr
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Soldier)
+	{
+		int NumBombs = 0;
+		for(TEntityPtr<CSoldierBomb> pBomb = GameWorld()->FindFirst<CSoldierBomb>(); pBomb; ++pBomb)
+		{
+			if(pBomb->GetOwner() == GetCid())
+			{
+				NumBombs += pBomb->GetNbBombs();
+			}
+		}
+
+		if(NumBombs)
+		{
+			GameServer()->SendBroadcast_Localization_P(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				NumBombs,
+				_CP("Soldier", "One bomb left", "{int:NumBombs} bombs left"),
+				"NumBombs", &NumBombs,
+				NULL
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Scientist)
+	{
+		int NumMines = 0;
+		for(TEntityPtr<CScientistMine> pMine = GameWorld()->FindFirst<CScientistMine>(); pMine; ++pMine)
+		{
+			if(pMine->GetOwner() == m_pPlayer->GetCid())
+				NumMines++;
+		}
+
+		CWhiteHole *pOwnWhiteHole = nullptr;
+		for(TEntityPtr<CWhiteHole> pWhiteHole = GameWorld()->FindFirst<CWhiteHole>(); pWhiteHole; ++pWhiteHole)
+		{
+			if(pWhiteHole->GetOwner() == m_pPlayer->GetCid())
+			{
+				pOwnWhiteHole = pWhiteHole;
+				break;
+			}
+		}
+
+		if(m_BroadcastWhiteHoleReady + (2 * Server()->TickSpeed()) > Server()->Tick())
+		{
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("The white hole is available!"),
+				NULL
+			);
+		}
+		else if(NumMines > 0 && !pOwnWhiteHole)
+		{
+			GameServer()->SendBroadcast_Localization_P(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME, NumMines,
+				_P("One mine is active", "{int:NumMines} mines are active"),
+				"NumMines", &NumMines,
+				NULL
+			);
+		}
+		else if(NumMines <= 0 && pOwnWhiteHole)
+		{
+			int RemainingTicks = pOwnWhiteHole->GetEndTick() - CurrentTick;
+			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_("White hole: {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				NULL
+			);
+		}
+		else if(NumMines > 0 && pOwnWhiteHole)
+		{
+			int RemainingTicks = pOwnWhiteHole->GetEndTick() - CurrentTick;
+			int Seconds = 1 + RemainingTicks / Server()->TickSpeed();
+			dynamic_string Buffer;
+			Server()->Localization()->Format_LP(Buffer, GetPlayer()->GetLanguage(), NumMines,
+				_P("One mine is active", "{int:NumMines} mines are active"),
+				"NumMines", &NumMines,
+				nullptr);
+			Buffer.append("\n");
+			Server()->Localization()->Format_L(Buffer, GetPlayer()->GetLanguage(),
+				_("White hole: {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				nullptr);
+			GameServer()->SendBroadcast(GetCid(), Buffer.buffer(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Biologist)
+	{
+		int NumMines = 0;
+		for(TEntityPtr<CBiologistMine> pMine = GameWorld()->FindFirst<CBiologistMine>(); pMine; ++pMine)
+		{
+			if(pMine->GetOwner() == m_pPlayer->GetCid())
+				NumMines++;
+		}
+
+		if(NumMines > 0)
+		{
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Biologist", "Mine activated"),
+				NULL
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Ninja)
+	{
+		int TargetId = m_NinjaTargetCid;
+		int CoolDown = m_NinjaTargetTick - Server()->Tick();
+
+		if((CoolDown > 0))
+		{
+			int Seconds = 1 + CoolDown / Server()->TickSpeed();
+			GameServer()->SendBroadcast_Localization(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Ninja", "Next target in {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				NULL
+			);
+		}
+		else if(TargetId >= 0)
+		{
+			GameServer()->SendBroadcast_Localization(GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Ninja", "Target to eliminate: {str:PlayerName}"),
+				"PlayerName", Server()->ClientName(TargetId),
+				NULL
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Sniper)
+	{
+		if(m_pCharacter->PositionIsLocked())
+		{
+			int Seconds = 1+m_PositionLockTicksRemaining/Server()->TickSpeed();
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Sniper", "Position lock: {sec:RemainingTime}"),
+				"RemainingTime", &Seconds,
+				NULL
+			);
+		}
+	}
+	else if(GetPlayerClass() == EPlayerClass::Mercenary)
+	{
+		CMercenaryBomb *pOwnBomb = nullptr;
+		for(TEntityPtr<CMercenaryBomb> pBomb = GameWorld()->FindFirst<CMercenaryBomb>(); pBomb; ++pBomb)
+		{
+			if(pBomb->GetOwner() == m_pPlayer->GetCid())
+			{
+				pOwnBomb = pBomb;
+				break;
+			}
+		}
+
+		if(pOwnBomb)
+		{
+			float BombLevel = pOwnBomb->GetLoad() / static_cast<float>(Config()->m_InfMercBombs);
+			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				_C("Mercenary", "Explosive yield: {percent:BombLevel}"),
+				"BombLevel", &BombLevel,
+				NULL);
 		}
 	}
 	else if(GetPlayerClass() == EPlayerClass::Hero)
@@ -1507,52 +1561,11 @@ void CInfClassHuman::BroadcastWeaponState() const
 		//Search for flag
 		int CoolDown = m_pHeroFlag ? m_pHeroFlag->GetSpawnTick() - CurrentTick : 0;
 
-		if(m_pCharacter->GetActiveWeapon() == WEAPON_HAMMER)
-		{
-			int Turrets = m_TurretCount;
-			if(!GameController()->AreTurretsEnabled())
-			{
-				GameServer()->SendBroadcast_Localization(GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_("The turrets are not allowed by the game rules (at least right now)."),
-					nullptr);
-			}
-			else if(Turrets > 0)
-			{
-				int MaxTurrets = Config()->m_InfTurretMaxPerPlayer;
-				if(MaxTurrets == 1)
-				{
-					GameServer()->SendBroadcast_Localization(GetCid(),
-						BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-						_("You have a turret. Use the hammer to place it."),
-						nullptr
-					);
-				}
-				else
-				{
-					GameServer()->SendBroadcast_Localization_P(GetCid(),
-						BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME, Turrets,
-						_("You have {int:NumTurrets} of {int:MaxTurrets} turrets. Use the hammer to place one."),
-						"NumTurrets", &Turrets,
-						"MaxTurrets", &MaxTurrets,
-						nullptr
-					);
-				}
-			}
-			else
-			{
-				GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-					BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
-					_("You don't have a turret to place"),
-					nullptr
-				);
-			}
-		}
-		else if(CoolDown > 0 && (ClientVersion < VERSION_INFC_140)) // 140 introduces native timers for Hero
+		if(CoolDown > 0 && (ClientVersion < VERSION_INFC_140)) // 140 introduces native timers for Hero
 		{
 			int Seconds = 1 + CoolDown / Server()->TickSpeed();
 			GameServer()->SendBroadcast_Localization(GetPlayer()->GetCid(),
-				BROADCAST_PRIORITY_WEAPONSTATE, BROADCAST_DURATION_REALTIME,
+				EBroadcastPriority::WEAPONSTATE, BROADCAST_DURATION_REALTIME,
 				_("Next flag in {sec:RemainingTime}"),
 				"RemainingTime", &Seconds,
 				nullptr
@@ -1682,12 +1695,12 @@ void CInfClassHuman::SnapScientist(int SnappingClient)
 
 	if(m_pCharacter->GetActiveWeapon() == WEAPON_GRENADE)
 	{
-		vec2 PortalPos;
+		const std::optional<vec2> PortalPos = CLaserTeleport::FindPortalPosition(m_pCharacter);
 
-		if(FindPortalPosition(&PortalPos))
+		if(PortalPos.has_value())
 		{
 			const int CursorId = GameController()->GetPlayerOwnCursorId(GetCid());
-			GameController()->SendHammerDot(PortalPos, CursorId);
+			GameController()->SendHammerDot(PortalPos.value(), CursorId);
 		}
 	}
 }
@@ -1747,7 +1760,8 @@ void CInfClassHuman::PlaceEngineerWall(WeaponFireContext *pFireContext)
 
 		if(pFireContext->FireAccepted)
 		{
-			pExistingWall->SetEndPosition(GetPos());
+			pExistingWall->SetSecondPosition(GetPos());
+			pExistingWall->SetLifespan(Config()->m_InfBarrierLifeSpan);
 			GameServer()->CreateSound(GetPos(), SOUND_LASER_FIRE);
 		}
 		else
@@ -1795,7 +1809,13 @@ void CInfClassHuman::PlaceLooperWall(WeaponFireContext *pFireContext)
 
 		if(pFireContext->FireAccepted)
 		{
-			pExistingWall->SetEndPosition(GetPos());
+			pExistingWall->SetSecondPosition(GetPos());
+			float LifeSpanFactor = 1.0f;
+			if(GameController()->GetRoundType() == ERoundType::Survival)
+			{
+				LifeSpanFactor *= 0.5f;
+			}
+			pExistingWall->SetLifespan(Config()->m_InfLooperBarrierLifeSpan * LifeSpanFactor);
 			GameServer()->CreateSound(GetPos(), SOUND_LASER_FIRE);
 		}
 		else
@@ -1805,47 +1825,30 @@ void CInfClassHuman::PlaceLooperWall(WeaponFireContext *pFireContext)
 	}
 }
 
-void CInfClassHuman::FireSoldierBomb(WeaponFireContext *pFireContext)
-{
-	vec2 ProjStartPos = GetPos() + GetDirection() * GetProximityRadius() * 0.75f;
-
-	for(CSoldierBomb *pBomb = (CSoldierBomb *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_SOLDIER_BOMB); pBomb; pBomb = (CSoldierBomb *)pBomb->TypeNext())
-	{
-		if(pBomb->GetOwner() == GetCid())
-		{
-			pBomb->Explode();
-			return;
-		}
-	}
-
-	new CSoldierBomb(GameServer(), ProjStartPos, GetCid());
-	GameServer()->CreateSound(GetPos(), SOUND_GRENADE_FIRE);
-}
-
 void CInfClassHuman::FireMercenaryBomb(WeaponFireContext *pFireContext)
 {
-	CMercenaryBomb *pCurrentBomb = nullptr;
-	for(CMercenaryBomb *pBomb = (CMercenaryBomb *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_MERCENARY_BOMB); pBomb; pBomb = (CMercenaryBomb *)pBomb->TypeNext())
+	CMercenaryBomb *pOwnBomb = nullptr;
+	for(TEntityPtr<CMercenaryBomb> pBomb = GameWorld()->FindFirst<CMercenaryBomb>(); pBomb; ++pBomb)
 	{
 		if(pBomb->GetOwner() == GetCid())
 		{
-			pCurrentBomb = pBomb;
+			pOwnBomb = pBomb;
 			break;
 		}
 	}
 
-	if(pCurrentBomb)
+	if(pOwnBomb)
 	{
-		float Distance = distance(pCurrentBomb->GetPos(), GetPos());
+		float Distance = distance(pOwnBomb->GetPos(), GetPos());
 		const float SafeDistance = 16;
-		if(pCurrentBomb->IsReadyToExplode() || Distance > pCurrentBomb->GetProximityRadius() + SafeDistance)
+		if(pOwnBomb->IsReadyToExplode() || Distance > pOwnBomb->GetProximityRadius() + SafeDistance)
 		{
-			pCurrentBomb->Explode(GetCid());
+			pOwnBomb->Explode(GetCid());
 		}
 		else
 		{
-			const float UpgradePoints = Distance <= pCurrentBomb->GetProximityRadius() ? 2 : 0.5;
-			UpgradeMercBomb(pCurrentBomb, UpgradePoints);
+			const float UpgradePoints = Distance <= pOwnBomb->GetProximityRadius() ? 2 : 0.5;
+			UpgradeMercBomb(pOwnBomb, UpgradePoints);
 		}
 	}
 	else
@@ -1853,7 +1856,7 @@ void CInfClassHuman::FireMercenaryBomb(WeaponFireContext *pFireContext)
 		new CMercenaryBomb(GameServer(), GetPos(), GetCid());
 	}
 
-	m_pCharacter->SetReloadDuration(0.25f);
+	pFireContext->ReloadInterval = 0.25f;
 }
 
 void CInfClassHuman::PlaceScientistMine(WeaponFireContext *pFireContext)
@@ -1868,7 +1871,7 @@ void CInfClassHuman::PlaceScientistMine(WeaponFireContext *pFireContext)
 	CScientistMine *pOlderMine = 0;
 	CScientistMine *pIntersectMine = 0;
 
-	CScientistMine *p = (CScientistMine *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_SCIENTIST_MINE);
+	for(TEntityPtr<CScientistMine> p = GameWorld()->FindFirst<CScientistMine>(); p; ++p)
 	while(p)
 	{
 		float d = distance(p->GetPos(), ProjStartPos);
@@ -1905,8 +1908,7 @@ void CInfClassHuman::PlaceScientistMine(WeaponFireContext *pFireContext)
 		GameWorld()->DestroyEntity(pOlderMine);
 
 	new CScientistMine(GameServer(), ProjStartPos, GetCid());
-
-	m_pCharacter->SetReloadDuration(0.5f);
+	pFireContext->ReloadInterval = 0.5f;
 }
 
 void CInfClassHuman::PlaceTurret(WeaponFireContext *pFireContext)
@@ -1974,76 +1976,15 @@ void CInfClassHuman::OnMercGrenadeFired(WeaponFireContext *pFireContext)
 
 	GameServer()->CreateSound(GetPos(), SOUND_GRENADE_FIRE);
 
-	m_pCharacter->SetReloadDuration(0.25f);
+	pFireContext->ReloadInterval = 0.25f;
 }
 
 void CInfClassHuman::OnMedicGrenadeFired(WeaponFireContext *pFireContext)
 {
 	int HealingExplosionRadius = 4;
-	new CGrowingExplosion(GameServer(), GetPos(), GetDirection(), GetCid(), HealingExplosionRadius, GROWING_EXPLOSION_EFFECT::HEAL_HUMANS);
+	new CGrowingExplosion(GameServer(), GetPos(), GetDirection(), GetCid(), HealingExplosionRadius, EGrowingExplosionEffect::HEAL_HUMANS);
 
 	GameServer()->CreateSound(GetPos(), SOUND_GRENADE_FIRE);
-}
-
-void CInfClassHuman::OnPortalGunFired(WeaponFireContext *pFireContext)
-{
-	vec2 PortalPos;
-	if(!FindPortalPosition(&PortalPos))
-	{
-		pFireContext->FireAccepted = false;
-		return;
-	}
-
-	vec2 OldPos = GetPos();
-	m_pCharacter->SetPosition(PortalPos);
-	m_pCharacter->ResetHook();
-
-	float SelfDamage = Config()->m_InfScientistTpSelfharm;
-	if(SelfDamage)
-	{
-		m_pCharacter->TakeDamage(vec2(0.0f, 0.0f), SelfDamage * 2, GetCid(), EDamageType::SCIENTIST_TELEPORT);
-	}
-	GameServer()->CreateDeath(OldPos, GetCid());
-	GameServer()->CreateDeath(PortalPos, GetCid());
-	GameServer()->CreateSound(PortalPos, SOUND_CTF_RETURN);
-	new CLaserTeleport(GameServer(), PortalPos, OldPos);
-}
-
-void CInfClassHuman::OnBlindingLaserFired(WeaponFireContext *pFireContext)
-{
-	new CBlindingLaser(GameContext(), GetPos(), GetDirection(), GetCid());
-}
-
-void CInfClassHuman::OnBiologistLaserFired(WeaponFireContext *pFireContext)
-{
-	if(pFireContext->AmmoAvailable < 10)
-	{
-		pFireContext->FireAccepted = false;
-		pFireContext->NoAmmo = true;
-		return;
-	}
-
-	const float BioLaserMaxLength = 400.0f;
-	vec2 To = GetPos() + GetDirection() * BioLaserMaxLength;
-	bool CanFire = GameServer()->Collision()->IntersectLine(GetPos(), To, 0x0, &To);
-
-	if(!CanFire)
-	{
-		pFireContext->FireAccepted = false;
-		pFireContext->NoAmmo = true;
-		return;
-	}
-
-	for(TEntityPtr<CBiologistMine> pMine = GameWorld()->FindFirst<CBiologistMine>(); pMine; ++pMine)
-	{
-		if(pMine->GetOwner() != GetCid()) continue;
-			GameWorld()->DestroyEntity(pMine);
-	}
-
-	int Lasers = Config()->m_InfBioMineLasers;
-	int PerLaserDamage = 10;
-	new CBiologistMine(GameServer(), GetPos(), To, GetCid(), Lasers, PerLaserDamage);
-	pFireContext->AmmoConsumed = pFireContext->AmmoAvailable;
 }
 
 void CInfClassHuman::OnMercLaserFired(WeaponFireContext *pFireContext)
@@ -2088,31 +2029,6 @@ bool CInfClassHuman::PositionLockAvailable() const
 	}
 
 	return true;
-}
-
-bool CInfClassHuman::FindPortalPosition(vec2 *pPosition)
-{
-	vec2 PortalShift = vec2(m_pCharacter->m_Input.m_TargetX, m_pCharacter->m_Input.m_TargetY);
-	vec2 PortalDir = normalize(PortalShift);
-	if(length(PortalShift) > 500.0f)
-		PortalShift = PortalDir * 500.0f;
-
-	float Iterator = length(PortalShift);
-	while(Iterator > 0.0f)
-	{
-		PortalShift = PortalDir * Iterator;
-		vec2 PortalPos = GetPos() + PortalShift;
-
-		if(GameController()->IsSpawnable(PortalPos, EZoneTele::NoScientist))
-		{
-			*pPosition = PortalPos;
-			return true;
-		}
-
-		Iterator -= 4.0f;
-	}
-
-	return false;
 }
 
 void CInfClassHuman::OnSlimeEffect(int Owner, int Damage, float DamageInterval)

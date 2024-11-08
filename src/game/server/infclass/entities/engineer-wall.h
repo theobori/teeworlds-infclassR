@@ -15,18 +15,14 @@ public:
 	CEngineerWall(CGameContext *pGameContext, vec2 Pos, int Owner);
 	~CEngineerWall() override;
 
-	void SetEndPosition(vec2 EndPosition);
-
 	void Tick() override;
 	void TickPaused() override;
 	void Snap(int SnappingClient) override;
-	int GetEndTick() const { return m_EndTick; }
 	void OnHitInfected(CInfClassCharacter *pCharacter);
 
 private:
 	void PrepareSnapData();
 
-	int m_EndTick{};
 	int m_EndPointId{};
 	int m_WallFlashTicks{};
 	int m_SnapStartTick{};
