@@ -86,7 +86,6 @@ int CClientGameTileGetter::GetClientGameTileIndex(int TileX, int TileY) const
 
 int LoadPNG(CImageInfo *pImg, const char *pFilename)
 {
-	char aCompleteFilename[IO_MAX_PATH_LENGTH];
 	IOHANDLE File = io_open(pFilename, IOFLAG_READ);
 	if(File)
 	{
@@ -910,10 +909,13 @@ int CMapConverter::AddEmbeddedImage(const char *pImageName, int Width, int Heigh
 	CImageInfo img;
 	CImageInfo *pImg = &img;
 
-	char aBuf[512];
-	str_format(aBuf, sizeof(aBuf), "data/mapres/%s.png", pImageName);
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "mapres/%s.png", pImageName);
 
-	if (!LoadPNG(pImg, aBuf)) {
+	char aFullPath[512];
+	m_pStorage->GetDataPath(aBuf, aFullPath, sizeof(aFullPath));
+
+	if (!LoadPNG(pImg, aFullPath)) {
 		return -1;
 	}
 
